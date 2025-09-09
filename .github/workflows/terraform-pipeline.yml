@@ -1,4 +1,8 @@
 name: Terraform Pipeline
+
+# This pipeline creates and manages AWS infrastructure
+# Run this first before the Web Pipeline
+
 on:
   push:
     branches: [ main ]
@@ -36,10 +40,16 @@ jobs:
         with:
           directory: ./infra/terraform
       - name: Terraform Plan
-        run: terraform plan
+        run: terraform plan -out=tfplan
+      
       - name: Terraform Apply
         if: github.ref == 'refs/heads/main' && success()
-        run: terraform apply -auto-approve
+        run: |
+          echo "🚀 Applying Terraform changes to create AWS infrastructure..."
+          terraform apply -auto-approve tfplan
+          echo "✅ Infrastructure deployment complete!"
+          echo "📋 Infrastructure outputs:"
+          terraform output
       - name: Terratest
         uses: actions/setup-go@v4
         with:

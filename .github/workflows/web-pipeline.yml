@@ -1,4 +1,8 @@
 name: Web Pipeline
+
+# This pipeline builds and deploys the frontend and Lambda function
+# Note: Run the Terraform Pipeline first to create AWS infrastructure
+
 on:
   push:
     branches: [ main ]
@@ -73,13 +77,14 @@ jobs:
         run: |
           cd infra/terraform
           terraform init
-          # Check if terraform state has resources
-          if terraform show > /dev/null 2>&1; then
+          # Check if terraform state has resources and outputs exist
+          if terraform output s3_bucket_name > /dev/null 2>&1; then
             echo "exists=true" >> $GITHUB_OUTPUT
-            echo "Infrastructure exists, proceeding with deployment"
+            echo "✅ Infrastructure exists, proceeding with deployment"
           else
             echo "exists=false" >> $GITHUB_OUTPUT
-            echo "Infrastructure not deployed yet, skipping deployment steps"
+            echo "⚠️  Infrastructure not deployed yet, skipping deployment steps"
+            echo "Run the terraform pipeline first to create AWS resources"
           fi
       
       - name: Get Terraform outputs
