@@ -23,7 +23,7 @@ resource "aws_s3_bucket" "website" {
     }
   }
   replication_configuration {
-    role = "arn:aws:iam::479324457009:user/pipelines-terraform" 
+    role = "arn:aws:iam::479324457009:user/pipelines-terraform"
     rules {
       id     = "replicate-objects"
       status = "Enabled"
