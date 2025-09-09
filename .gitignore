@@ -4,6 +4,18 @@ node_modules/
 # Lambda build artifacts
 lambda.zip
 
+# Vite build output
+dist/
+
+# Environment files
+.env
+
+# npm pack files
+*.tgz
+
+# Editor swap files
+*.swp
+
 # Terraform state
 *.tfstate
 *.tfstate.backup
