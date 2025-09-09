@@ -47,6 +47,22 @@ variable "environment" {
 # S3 bucket for website hosting
 resource "aws_s3_bucket" "website" {
   bucket = "${var.project_name}-website-${random_id.bucket_suffix.hex}"
+  
+  tags = {
+    Name        = "${var.project_name}-website"
+    Environment = var.environment
+  }
+}
+
+# Enable S3 bucket encryption
+resource "aws_s3_bucket_server_side_encryption_configuration" "website_encryption" {
+  bucket = aws_s3_bucket.website.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
 }
 
 resource "random_id" "bucket_suffix" {
@@ -104,6 +120,7 @@ resource "aws_cloudfront_distribution" "website_cdn" {
   is_ipv6_enabled     = true
   default_root_object = "index.html"
 
+  # Add custom response headers policy
   default_cache_behavior {
     allowed_methods  = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
     cached_methods   = ["GET", "HEAD"]
@@ -117,6 +134,9 @@ resource "aws_cloudfront_distribution" "website_cdn" {
     }
 
     viewer_protocol_policy = "redirect-to-https"
+    
+    # Associate the response headers policy
+    response_headers_policy_id = aws_cloudfront_response_headers_policy.security_headers.id
   }
 
   restrictions {
@@ -128,6 +148,35 @@ resource "aws_cloudfront_distribution" "website_cdn" {
   viewer_certificate {
     cloudfront_default_certificate = true
     minimum_protocol_version       = "TLSv1.2_2021"
+  }
+}
+
+# CloudFront security headers policy
+resource "aws_cloudfront_response_headers_policy" "security_headers" {
+  name = "${var.project_name}-security-headers"
+  
+  security_headers_config {
+    content_type_options {
+      override = true
+    }
+    frame_options {
+      frame_option = "DENY"
+      override = true
+    }
+    referrer_policy {
+      referrer_policy = "same-origin"
+      override = true
+    }
+    xss_protection {
+      mode_block = true
+      protection = true
+      override = true
+    }
+    strict_transport_security {
+      access_control_max_age_sec = 31536000
+      include_subdomains = true
+      override = true
+    }
   }
 }
 
@@ -224,6 +273,13 @@ resource "aws_lambda_function" "contact_form" {
     mode = "Active"
   }
 
+  # Add timeout configuration
+  timeout = 10  # 10 seconds
+  memory_size = 256  # 256 MB
+
+  # Add reserved concurrency to prevent overwhelming DynamoDB
+  reserved_concurrent_executions = 10
+
   environment {
     variables = {
       DYNAMODB_TABLE = aws_dynamodb_table.contact_submissions.name
@@ -248,6 +304,14 @@ resource "aws_api_gateway_rest_api" "contact_api" {
   }
 }
 
+# Add request validator for API Gateway
+resource "aws_api_gateway_request_validator" "contact_validator" {
+  name                        = "${var.project_name}-contact-validator"
+  rest_api_id                 = aws_api_gateway_rest_api.contact_api.id
+  validate_request_body       = true
+  validate_request_parameters = true
+}
+
 resource "aws_api_gateway_resource" "contact" {
   rest_api_id = aws_api_gateway_rest_api.contact_api.id
   parent_id   = aws_api_gateway_rest_api.contact_api.root_resource_id
@@ -263,6 +327,9 @@ resource "aws_api_gateway_method" "post_contact" {
   request_parameters = {
     "method.request.header.Content-Type" = true
   }
+  
+  # Add request validation
+  request_validator_id = aws_api_gateway_request_validator.contact_validator.id
 }
 
 # Enable CORS
@@ -348,6 +415,9 @@ resource "aws_api_gateway_stage" "prod" {
   deployment_id = aws_api_gateway_deployment.contact_deployment.id
   rest_api_id   = aws_api_gateway_rest_api.contact_api.id
   stage_name    = "prod"
+  
+  # Enable X-Ray tracing for API Gateway
+  xray_tracing_enabled = true
 }
 
 # Outputs
