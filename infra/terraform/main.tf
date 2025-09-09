@@ -69,6 +69,11 @@ resource "random_id" "bucket_suffix" {
   byte_length = 4
 }
 
+# Add a random suffix for unique resource naming
+resource "random_id" "resource_suffix" {
+  byte_length = 3
+}
+
 resource "aws_s3_bucket_website_configuration" "website_config" {
   bucket = aws_s3_bucket.website.id
 
@@ -153,7 +158,7 @@ resource "aws_cloudfront_distribution" "website_cdn" {
 
 # CloudFront security headers policy
 resource "aws_cloudfront_response_headers_policy" "security_headers" {
-  name = "${var.project_name}-security-headers"
+  name = "${var.project_name}-security-headers-${random_id.resource_suffix.hex}"
 
   security_headers_config {
     content_type_options {
@@ -183,7 +188,7 @@ resource "aws_cloudfront_response_headers_policy" "security_headers" {
 
 # DynamoDB Table
 resource "aws_dynamodb_table" "contact_submissions" {
-  name         = "${var.project_name}-contact-submissions"
+  name         = "${var.project_name}-contact-submissions-${random_id.resource_suffix.hex}"
   billing_mode = "PAY_PER_REQUEST"
   hash_key     = "id"
 
@@ -203,14 +208,14 @@ resource "aws_dynamodb_table" "contact_submissions" {
   }
 
   tags = {
-    Name        = "${var.project_name}-contact-submissions"
+    Name        = "${var.project_name}-contact-submissions-${random_id.resource_suffix.hex}"
     Environment = var.environment
   }
 }
 
 # IAM Role for Lambda
 resource "aws_iam_role" "lambda_exec" {
-  name = "${var.project_name}-lambda-exec-role"
+  name = "${var.project_name}-lambda-exec-role-${random_id.resource_suffix.hex}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -238,7 +243,7 @@ resource "aws_iam_role_policy_attachment" "lambda_xray_policy" {
 }
 
 resource "aws_iam_role_policy" "lambda_dynamodb_policy" {
-  name = "${var.project_name}-lambda-dynamodb-policy"
+  name = "${var.project_name}-lambda-dynamodb-policy-${random_id.resource_suffix.hex}"
   role = aws_iam_role.lambda_exec.id
 
   policy = jsonencode({
@@ -263,7 +268,7 @@ resource "aws_iam_role_policy" "lambda_dynamodb_policy" {
 # Lambda Function
 resource "aws_lambda_function" "contact_form" {
   filename         = "lambda_function.zip"
-  function_name    = "${var.project_name}-contact-form"
+  function_name    = "${var.project_name}-contact-form-${random_id.resource_suffix.hex}"
   role             = aws_iam_role.lambda_exec.arn
   handler          = "index.handler"
   runtime          = "nodejs18.x"
@@ -297,7 +302,7 @@ data "archive_file" "lambda_zip" {
 
 # API Gateway
 resource "aws_api_gateway_rest_api" "contact_api" {
-  name        = "${var.project_name}-contact-api"
+  name        = "${var.project_name}-contact-api-${random_id.resource_suffix.hex}"
   description = "API for contact form submissions"
 
   endpoint_configuration {
@@ -311,7 +316,7 @@ resource "aws_api_gateway_rest_api" "contact_api" {
 
 # Add request validator for API Gateway
 resource "aws_api_gateway_request_validator" "contact_validator" {
-  name                        = "${var.project_name}-contact-validator"
+  name                        = "${var.project_name}-contact-validator-${random_id.resource_suffix.hex}"
   rest_api_id                 = aws_api_gateway_rest_api.contact_api.id
   validate_request_body       = true
   validate_request_parameters = true
