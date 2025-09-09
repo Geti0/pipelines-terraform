@@ -278,8 +278,8 @@ resource "aws_lambda_function" "contact_form" {
   timeout     = 10  # 10 seconds
   memory_size = 256 # 256 MB
 
-  # Add reserved concurrency to prevent overwhelming DynamoDB
-  reserved_concurrent_executions = 10
+  # Reserved concurrency removed due to AWS account limits
+  # reserved_concurrent_executions = 10
 
   environment {
     variables = {
