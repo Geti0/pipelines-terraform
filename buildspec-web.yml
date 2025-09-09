@@ -1,30 +1,78 @@
 version: 0.2
+
+env:
+  variables:
+    NODE_VERSION: "18"
+
 phases:
   install:
+    runtime-versions:
+      nodejs: $NODE_VERSION
     commands:
+      - echo Installing dependencies...
       - cd web/frontend
       - npm install
-  pre_build:
-    commands:
-      - npx eslint .
-      - npx stylelint "**/*.css"
-      - npx jest --coverage
       - cd ../lambda
       - npm install
-      - npx eslint index.js
-      - npx jest --coverage
+      
+  pre_build:
+    commands:
+      - echo Starting pre-build phase...
+      # Frontend linting and testing
+      - cd ../../web/frontend
+      - echo Running ESLint on frontend...
+      - npx eslint . --max-warnings 0
+      - echo Running Stylelint on CSS...
+      - npx stylelint "**/*.css"
+      - echo Running frontend tests...
+      - npx jest --coverage --coverageThreshold='{"global":{"branches":70,"functions":70,"lines":70,"statements":70}}'
+      
+      # Lambda linting and testing  
+      - cd ../lambda
+      - echo Running ESLint on Lambda...
+      - npx eslint index.js --max-warnings 0
+      - echo Running Lambda tests...
+      - npx jest --coverage --coverageThreshold='{"global":{"branches":70,"functions":70,"lines":70,"statements":70}}'
+      
   build:
     commands:
-      - cd ../frontend
+      - echo Starting build phase...
+      - cd ../../web/frontend
+      - echo Building frontend with Vite...
       - npx vite build
+      - echo Frontend build completed
+      
   post_build:
     commands:
-      - aws s3 sync dist s3://my-website-hosting-bucket-geti0-2025 --delete
-      - aws cloudfront create-invalidation --distribution-id $CLOUDFRONT_DISTRIBUTION_ID --paths "/*"
-      - cd ../lambda
-      - powershell Compress-Archive -Path index.js,node_modules,package.json -DestinationPath lambda.zip
-      - cd ../../infra/terraform/lambda
-      - terraform apply -auto-approve
+      - echo Starting post-build phase...
+      - echo Getting infrastructure outputs...
+      - cd ../../infra/terraform
+      - S3_BUCKET=$(terraform output -raw s3_bucket_name)
+      - CLOUDFRONT_ID=$(terraform output -raw cloudfront_distribution_id)
+      - API_GATEWAY_URL=$(terraform output -raw api_gateway_url)
+      
+      - echo Updating frontend with API Gateway URL...
+      - cd ../../web/frontend/dist
+      - sed -i "s|API_GATEWAY_URL_PLACEHOLDER|$API_GATEWAY_URL|g" *.js || echo "No JS files to update"
+      - find . -name "*.js" -exec sed -i "s|API_GATEWAY_URL_PLACEHOLDER|$API_GATEWAY_URL|g" {} \; || echo "No JS files found"
+      
+      - echo Deploying frontend to S3...
+      - aws s3 sync . s3://$S3_BUCKET --delete
+      
+      - echo Creating Lambda deployment package...
+      - cd ../../lambda
+      - zip -r ../lambda_function.zip . -x "coverage/*" "__tests__/*" "*.test.js" "jest.config.js" "eslint.config.js"
+      
+      - echo Updating Lambda function...
+      - cd ../../infra/terraform
+      - terraform apply -auto-approve -target=aws_lambda_function.contact_form
+      
+      - echo Invalidating CloudFront cache...
+      - aws cloudfront create-invalidation --distribution-id $CLOUDFRONT_ID --paths "/*"
+      
+      - echo Deployment completed successfully!
+      
 artifacts:
   files:
     - '**/*'
+  base-directory: '.'

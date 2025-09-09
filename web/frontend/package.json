@@ -1,0 +1,28 @@
+{
+  "name": "pipelines-terraform-frontend",
+  "version": "1.0.0",
+  "main": "contact.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview", 
+    "test": "jest",
+    "test:coverage": "jest --coverage",
+    "lint": "eslint . --ext .js --report-unused-disable-directives --max-warnings 0",
+    "lint:css": "stylelint '**/*.css'"
+  },
+  "keywords": ["aws", "frontend", "contact-form"],
+  "author": "Student",
+  "license": "MIT",
+  "description": "Frontend for AWS CI/CD Assignment",
+  "devDependencies": {
+    "@eslint/js": "^9.9.1",
+    "eslint": "^9.35.0",
+    "globals": "^15.9.0",
+    "jest": "^30.1.3",
+    "jest-environment-jsdom": "^30.1.2",
+    "stylelint": "^16.24.0",
+    "stylelint-config-standard": "^36.0.1",
+    "vite": "^7.1.5"
+  }
+}

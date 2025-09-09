@@ -1,25 +1,59 @@
 version: 0.2
+
+env:
+  variables:
+    TF_VERSION: "1.5.0"
+    GO_VERSION: "1.19"
+
 phases:
   install:
+    runtime-versions:
+      golang: $GO_VERSION
     commands:
-      - cd infra/terraform/lambda
-      - terraform init
+      - echo Installing dependencies...
+      - curl -fsSL https://releases.hashicorp.com/terraform/${TF_VERSION}/terraform_${TF_VERSION}_linux_amd64.zip -o terraform.zip
+      - unzip terraform.zip
+      - sudo mv terraform /usr/local/bin/
+      - curl -s https://api.github.com/repos/terraform-linters/tflint/releases/latest | grep browser_download_url | grep linux_amd64 | cut -d '"' -f 4 | wget -qi -
+      - unzip tflint_linux_amd64.zip
+      - sudo mv tflint /usr/local/bin/
+      - pip3 install checkov
+      
   pre_build:
     commands:
+      - echo Starting pre-build phase...
+      - cd infra/terraform
+      - terraform init
+      - echo Running Terraform format check...
       - terraform fmt -check
+      - echo Running Terraform validation...
       - terraform validate
+      - echo Running TFLint...
       - tflint
-      - checkov -d .
-      - cd ../../../test/terratest
-      - go test -v -coverprofile=coverage.out -covermode=atomic
-      - go tool cover -func=coverage.out | grep -E 'total:' | awk '{print $3}' | grep -qE '([6-9][0-9]|100)\.\d+%' || exit 1
+      - echo Running Checkov security scan...
+      - checkov -d . --quiet
+      - echo Running Terratest...
+      - cd ../test
+      - go mod tidy
+      - go test -v -timeout 45m -coverprofile=coverage.out -covermode=atomic
+      - COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print substr($3, 1, length($3)-1)}')
+      - echo "Test coverage: $COVERAGE%"
+      - echo $COVERAGE | awk '{if ($1+0 >= 60) print "Coverage check passed"; else {print "Coverage check failed: " $1 "% < 60%"; exit 1}}'
+      
   build:
     commands:
-      - cd ../../terraform/lambda
-      - terraform plan
+      - echo Starting build phase...
+      - cd ../../infra/terraform
+      - terraform plan -out=tfplan
+      - echo Terraform plan created successfully
+      
   post_build:
     commands:
-      - terraform apply -auto-approve
+      - echo Starting post-build phase...
+      - terraform apply tfplan
+      - echo Infrastructure deployed successfully
+      
 artifacts:
   files:
     - '**/*'
+  base-directory: '.'
