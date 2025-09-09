@@ -10,6 +10,9 @@ terraform {
   }
 }
 
+# Data source for current AWS region
+data "aws_region" "current" {}
+
 provider "aws" {
   region = var.aws_region
 }
@@ -304,7 +307,17 @@ resource "aws_api_gateway_deployment" "contact_deployment" {
   ]
 
   rest_api_id = aws_api_gateway_rest_api.contact_api.id
-  stage_name  = "prod"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+# API Gateway Stage
+resource "aws_api_gateway_stage" "prod" {
+  deployment_id = aws_api_gateway_deployment.contact_deployment.id
+  rest_api_id   = aws_api_gateway_rest_api.contact_api.id
+  stage_name    = "prod"
 }
 
 # Outputs
@@ -325,7 +338,7 @@ output "cloudfront_domain_name" {
 
 output "api_gateway_url" {
   description = "API Gateway URL"
-  value       = "${aws_api_gateway_deployment.contact_deployment.invoke_url}/contact"
+  value       = "https://${aws_api_gateway_rest_api.contact_api.id}.execute-api.${data.aws_region.current.name}.amazonaws.com/${aws_api_gateway_stage.prod.stage_name}/contact"
 }
 
 output "dynamodb_table_name" {
