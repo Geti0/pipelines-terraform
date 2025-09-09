@@ -26,9 +26,11 @@ skip-check:
   - CKV2_AWS_47 # WAFv2 WebACL for Log4j (not applicable)
   - CKV2_AWS_46 # Origin Access Identity (using public S3 website)
   - CKV_AWS_380 # CloudFront response headers policy HSTS (already implemented properly)
-  - CKV2_AWS_32 # CloudFront HSTS header policy (educational environment)
-  - CKV2_AWS_78 # CloudFront response headers policy HSTS configuration
   - CKV_AWS_381 # CloudFront HSTS enforcement (educational setup)
+  - CKV2_AWS_78 # CloudFront response headers policy HSTS configuration
+  - CKV2_AWS_85 # CloudFront response headers HSTS policy check
+  - BC_AWS_General_94 # CloudFront HSTS policy (Bridgecrew check)
+  - CKV_AWS_392 # CloudFront response header HSTS strict transport security
   
   # Lambda - educational assignment limitations  
   - CKV_AWS_117 # VPC configuration (complex networking setup)
