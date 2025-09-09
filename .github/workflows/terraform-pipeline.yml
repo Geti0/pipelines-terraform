@@ -7,9 +7,20 @@ on:
 jobs:
   terraform:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./infra/terraform
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
+      
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+      
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v2
       - name: Terraform Format
@@ -23,7 +34,7 @@ jobs:
       - name: Checkov Security Scan
         uses: bridgecrewio/checkov-action@v12
         with:
-          directory: ./terraform
+          directory: ./infra/terraform
       - name: Terraform Plan
         run: terraform plan
       - name: Terraform Apply
@@ -35,6 +46,6 @@ jobs:
           go-version: '1.21'
       - name: Run Terratest
         run: |
-          cd test/terratest
+          cd ../../infra/test
           go test -v -coverprofile=coverage.out -covermode=atomic
           go tool cover -func=coverage.out | grep -E 'total:' | awk '{print $3}' | grep -qE '([6-9][0-9]|100)\.\d+%' || exit 1

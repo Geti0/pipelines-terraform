@@ -10,56 +10,76 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
+      
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+      
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - name: Install dependencies
+      
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_wrapper: false
+      
+      - name: Install frontend dependencies
         run: |
-          cd frontend
+          cd web/frontend
           npm install
+      
       - name: Lint JS
         run: |
-          cd frontend
+          cd web/frontend
           npx eslint .
+      
       - name: Lint CSS
         run: |
-          cd frontend
+          cd web/frontend
           npx stylelint "**/*.css"
+      
       - name: Run frontend tests
         run: |
-          cd frontend
+          cd web/frontend
           npx jest --coverage
+      
       - name: Build static site
         run: |
-          cd frontend
+          cd web/frontend
           npx vite build
-      - name: Deploy to S3
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_REGION: ${{ secrets.AWS_REGION }}
+      
+      - name: Install Lambda dependencies
         run: |
-          aws s3 sync frontend/dist s3://my-website-hosting-bucket-geti0-2025 --delete
-      - name: Invalidate CloudFront
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_REGION: ${{ secrets.AWS_REGION }}
-        run: |
-          aws cloudfront create-invalidation --distribution-id ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }} --paths "/*"
+          cd web/lambda
+          npm install
+      
       - name: Lint Lambda
         run: |
-          cd terraform/lambda
+          cd web/lambda
           npx eslint index.js
+      
       - name: Run Lambda tests
         run: |
-          cd terraform/lambda
+          cd web/lambda
           npx jest --coverage
-      - name: Deploy Lambda
+      
+      - name: Get Terraform outputs
+        id: terraform-outputs
         run: |
-          cd terraform/lambda
-          npm install
-          powershell Compress-Archive -Path index.js,node_modules,package.json -DestinationPath lambda.zip
-          cd ../..
-          terraform apply -auto-approve
+          cd infra/terraform
+          terraform init
+          echo "s3_bucket=$(terraform output -raw s3_bucket_name)" >> $GITHUB_OUTPUT
+          echo "cloudfront_id=$(terraform output -raw cloudfront_distribution_id)" >> $GITHUB_OUTPUT
+      
+      - name: Deploy to S3
+        run: |
+          aws s3 sync web/frontend/dist s3://${{ steps.terraform-outputs.outputs.s3_bucket }} --delete
+      
+      - name: Invalidate CloudFront
+        run: |
+          aws cloudfront create-invalidation --distribution-id ${{ steps.terraform-outputs.outputs.cloudfront_id }} --paths "/*"
