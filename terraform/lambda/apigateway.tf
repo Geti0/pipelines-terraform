@@ -2,6 +2,9 @@
 resource "aws_api_gateway_rest_api" "contact_api" {
   name        = "ContactFormAPI"
   description = "API for contact form submissions"
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 resource "aws_api_gateway_resource" "contact" {

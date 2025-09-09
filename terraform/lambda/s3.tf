@@ -1,5 +1,47 @@
 resource "aws_s3_bucket" "website" {
   bucket = "my-website-hosting-bucket-geti0-2025"
+  logging {
+    target_bucket = "my-website-logs-bucket"
+    target_prefix = "s3-logs/"
+  }
+  versioning {
+    enabled = true
+  }
+  server_side_encryption_configuration {
+    rule {
+      apply_server_side_encryption_by_default {
+        kms_master_key_id = "arn:aws:kms:us-east-1:479324457009:key/85888b48-53c4-4b39-a2f8-a95a97eedd81"
+        sse_algorithm     = "aws:kms"
+      }
+    }
+  }
+  lifecycle_rule {
+    id      = "expire-objects"
+    enabled = true
+    expiration {
+      days = 365
+    }
+  }
+  replication_configuration {
+    role = "arn:aws:iam::479324457009:user/pipelines-terraform" 
+    rules {
+      id     = "replicate-objects"
+      status = "Enabled"
+      destination {
+        bucket        = "arn:aws:s3:::YOUR_DESTINATION_BUCKET"
+        storage_class = "STANDARD"
+      }
+      filter {
+        prefix = ""
+      }
+    }
+  }
+  public_access_block {
+    block_public_acls       = true
+    block_public_policy     = true
+    ignore_public_acls      = true
+    restrict_public_buckets = true
+  }
 }
 
 
