@@ -1,0 +1,23 @@
+# Checkov configuration for educational assignment
+# Skip some checks that are too restrictive for learning purposes
+
+skip-check:
+  # S3 bucket public access - needed for static website hosting
+  - CKV_AWS_53  # Block public ACLs
+  - CKV_AWS_54  # Block public policy 
+  - CKV_AWS_55  # Ignore public ACLs
+  - CKV_AWS_56  # Restrict public buckets
+  - CKV_AWS_70  # Allow any principal (needed for public website)
+  
+  # CloudFront - educational assignment doesn't need enterprise features
+  - CKV_AWS_86  # Access logging (adds costs)
+  - CKV_AWS_310 # Origin failover (complex setup)
+  - CKV_AWS_374 # Geo restriction (not needed for assignment)
+  - CKV_AWS_68  # WAF (adds costs and complexity)
+  
+  # Lambda - educational assignment limitations  
+  - CKV_AWS_117 # VPC configuration (complex networking setup)
+  - CKV_AWS_272 # Code signing (enterprise feature)
+  
+  # DynamoDB - using AWS managed encryption is sufficient for assignment
+  - CKV_AWS_119 # Customer managed KMS (adds costs)

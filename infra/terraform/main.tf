@@ -127,6 +127,7 @@ resource "aws_cloudfront_distribution" "website_cdn" {
 
   viewer_certificate {
     cloudfront_default_certificate = true
+    minimum_protocol_version       = "TLSv1.2_2021"
   }
 }
 
@@ -139,6 +140,16 @@ resource "aws_dynamodb_table" "contact_submissions" {
   attribute {
     name = "id"
     type = "S"
+  }
+
+  # Enable point-in-time recovery
+  point_in_time_recovery {
+    enabled = true
+  }
+
+  # Enable server-side encryption
+  server_side_encryption {
+    enabled = true
   }
 
   tags = {
@@ -168,6 +179,12 @@ resource "aws_iam_role" "lambda_exec" {
 resource "aws_iam_role_policy_attachment" "lambda_policy" {
   role       = aws_iam_role.lambda_exec.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+# Attach X-Ray permissions
+resource "aws_iam_role_policy_attachment" "lambda_xray_policy" {
+  role       = aws_iam_role.lambda_exec.name
+  policy_arn = "arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess"
 }
 
 resource "aws_iam_role_policy" "lambda_dynamodb_policy" {
@@ -201,6 +218,11 @@ resource "aws_lambda_function" "contact_form" {
   handler          = "index.handler"
   runtime          = "nodejs18.x"
   source_code_hash = data.archive_file.lambda_zip.output_base64sha256
+
+  # Enable X-Ray tracing
+  tracing_config {
+    mode = "Active"
+  }
 
   environment {
     variables = {
