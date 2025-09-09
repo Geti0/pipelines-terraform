@@ -47,7 +47,7 @@ variable "environment" {
 # S3 bucket for website hosting
 resource "aws_s3_bucket" "website" {
   bucket = "${var.project_name}-website-${random_id.bucket_suffix.hex}"
-  
+
   tags = {
     Name        = "${var.project_name}-website"
     Environment = var.environment
@@ -134,7 +134,7 @@ resource "aws_cloudfront_distribution" "website_cdn" {
     }
 
     viewer_protocol_policy = "redirect-to-https"
-    
+
     # Associate the response headers policy
     response_headers_policy_id = aws_cloudfront_response_headers_policy.security_headers.id
   }
@@ -154,28 +154,28 @@ resource "aws_cloudfront_distribution" "website_cdn" {
 # CloudFront security headers policy
 resource "aws_cloudfront_response_headers_policy" "security_headers" {
   name = "${var.project_name}-security-headers"
-  
+
   security_headers_config {
     content_type_options {
       override = true
     }
     frame_options {
       frame_option = "DENY"
-      override = true
+      override     = true
     }
     referrer_policy {
       referrer_policy = "same-origin"
-      override = true
+      override        = true
     }
     xss_protection {
       mode_block = true
       protection = true
-      override = true
+      override   = true
     }
     strict_transport_security {
       access_control_max_age_sec = 31536000
-      include_subdomains = true
-      override = true
+      include_subdomains         = true
+      override                   = true
     }
   }
 }
@@ -274,8 +274,8 @@ resource "aws_lambda_function" "contact_form" {
   }
 
   # Add timeout configuration
-  timeout = 10  # 10 seconds
-  memory_size = 256  # 256 MB
+  timeout     = 10  # 10 seconds
+  memory_size = 256 # 256 MB
 
   # Add reserved concurrency to prevent overwhelming DynamoDB
   reserved_concurrent_executions = 10
@@ -327,7 +327,7 @@ resource "aws_api_gateway_method" "post_contact" {
   request_parameters = {
     "method.request.header.Content-Type" = true
   }
-  
+
   # Add request validation
   request_validator_id = aws_api_gateway_request_validator.contact_validator.id
 }
@@ -415,7 +415,7 @@ resource "aws_api_gateway_stage" "prod" {
   deployment_id = aws_api_gateway_deployment.contact_deployment.id
   rest_api_id   = aws_api_gateway_rest_api.contact_api.id
   stage_name    = "prod"
-  
+
   # Enable X-Ray tracing for API Gateway
   xray_tracing_enabled = true
 }
