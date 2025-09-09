@@ -27,8 +27,13 @@ jobs:
       
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v2
+      
+      - name: Terraform Init
+        run: terraform init
+      
       - name: Terraform Format
         run: terraform fmt -check -recursive
+      
       - name: Terraform Validate
         run: terraform validate
       - name: TFLint
@@ -45,11 +50,15 @@ jobs:
       - name: Terraform Apply
         if: github.ref == 'refs/heads/main' && success()
         run: |
-          echo "🚀 Applying Terraform changes to create AWS infrastructure..."
+          echo "Applying Terraform changes to create AWS infrastructure..."
           terraform apply -auto-approve tfplan
-          echo "✅ Infrastructure deployment complete!"
-          echo "📋 Infrastructure outputs:"
-          terraform output
+          echo "Infrastructure deployment complete!"
+          echo "Infrastructure outputs:"
+          if terraform output > /dev/null 2>&1; then
+            terraform output
+          else
+            echo "No outputs available."
+          fi
       - name: Terratest
         uses: actions/setup-go@v4
         with:
