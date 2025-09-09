@@ -27,12 +27,6 @@ jobs:
       
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v2
-        with:
-          terraform_wrapper: false
-      
-      - name: Terraform Init
-        run: terraform init
-      
       - name: Terraform Format
         run: terraform fmt -check -recursive
       - name: Terraform Validate
@@ -55,11 +49,7 @@ jobs:
           terraform apply -auto-approve tfplan
           echo "✅ Infrastructure deployment complete!"
           echo "📋 Infrastructure outputs:"
-          if terraform output > /dev/null 2>&1; then
-            terraform output
-          else
-            echo "No outputs available yet."
-          fi
+          terraform output
       - name: Terratest
         uses: actions/setup-go@v4
         with:
