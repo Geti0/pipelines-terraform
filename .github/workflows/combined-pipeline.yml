@@ -1,0 +1,152 @@
+name: Combined CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  # Infrastructure Pipeline
+  terraform:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./infra/terraform
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+      
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_wrapper: false
+      
+      - name: Terraform Format
+        run: terraform fmt -check -recursive
+      
+      - name: Terraform Init
+        run: terraform init
+      
+      - name: Terraform Validate
+        run: terraform validate
+      
+      - name: TFLint
+        uses: terraform-linters/setup-tflint@v1
+      
+      - name: Run TFLint
+        run: tflint --init && tflint
+      
+      - name: Checkov Security Scan
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: ./infra/terraform
+      
+      - name: Terraform Plan
+        run: terraform plan -out=tfplan
+      
+      - name: Terraform Apply
+        if: github.ref == 'refs/heads/main' && success()
+        run: terraform apply -auto-approve tfplan
+      
+      - name: Set up Go for Terratest
+        if: success()
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+      
+      - name: Run Terratest
+        if: success()
+        run: |
+          cd ../../infra/test
+          go test -v -coverprofile=coverage.out -covermode=atomic
+          go tool cover -func=coverage.out | grep -E 'total:' | awk '{print $3}' | grep -qE '([6-9][0-9]|100)\.\d+%' || exit 1
+
+  # Web Pipeline - runs after terraform
+  web:
+    runs-on: ubuntu-latest
+    needs: terraform
+    if: always()
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+      
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_wrapper: false
+      
+      - name: Install frontend dependencies
+        run: |
+          cd web/frontend
+          npm install
+      
+      - name: Lint JS
+        run: |
+          cd web/frontend
+          npx eslint .
+      
+      - name: Lint CSS
+        run: |
+          cd web/frontend
+          npx stylelint "**/*.css"
+      
+      - name: Run frontend tests
+        run: |
+          cd web/frontend
+          npx jest --coverage
+      
+      - name: Build static site
+        run: |
+          cd web/frontend
+          npx vite build
+      
+      - name: Install Lambda dependencies
+        run: |
+          cd web/lambda
+          npm install
+      
+      - name: Lint Lambda
+        run: |
+          cd web/lambda
+          npx eslint index.js
+      
+      - name: Run Lambda tests
+        run: |
+          cd web/lambda
+          npx jest --coverage
+      
+      - name: Check if infrastructure exists and deploy
+        if: needs.terraform.result == 'success'
+        run: |
+          cd infra/terraform
+          terraform init
+          
+          # Get outputs and deploy
+          S3_BUCKET=$(terraform output -raw s3_bucket_name)
+          CLOUDFRONT_ID=$(terraform output -raw cloudfront_distribution_id)
+          
+          echo "Deploying to S3 bucket: $S3_BUCKET"
+          aws s3 sync ../../web/frontend/dist s3://$S3_BUCKET --delete
+          
+          echo "Invalidating CloudFront distribution: $CLOUDFRONT_ID"
+          aws cloudfront create-invalidation --distribution-id $CLOUDFRONT_ID --paths "/*"
