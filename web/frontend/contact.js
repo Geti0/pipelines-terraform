@@ -7,27 +7,27 @@ document.getElementById('contactForm').addEventListener('submit', async function
 
   // Client-side validation
   if (!name || !email || !message) {
-    responseDiv.textContent = "Please fill in all fields.";
-    responseDiv.style.color = "red";
+    responseDiv.textContent = 'Please fill in all fields.';
+    responseDiv.style.color = 'red';
     return;
   }
 
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (!emailRegex.test(email)) {
-    responseDiv.textContent = "Please enter a valid email address.";
-    responseDiv.style.color = "red";
+    responseDiv.textContent = 'Please enter a valid email address.';
+    responseDiv.style.color = 'red';
     return;
   }
 
-  responseDiv.textContent = "Sending...";
-  responseDiv.style.color = "blue";
+  responseDiv.textContent = 'Sending...';
+  responseDiv.style.color = 'blue';
 
   try {
-    const res = await fetch("API_GATEWAY_URL_PLACEHOLDER", {
-      method: "POST",
+    const res = await fetch('API_GATEWAY_URL_PLACEHOLDER', {
+      method: 'POST',
       headers: { 
-        "Content-Type": "application/json",
-        "Accept": "application/json"
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
       },
       body: JSON.stringify({ name, email, message })
     });
@@ -35,16 +35,16 @@ document.getElementById('contactForm').addEventListener('submit', async function
     const data = await res.json();
     
     if (res.ok && data.success) {
-      responseDiv.textContent = "Message sent successfully! Thank you for contacting us.";
-      responseDiv.style.color = "green";
+      responseDiv.textContent = 'Message sent successfully! Thank you for contacting us.';
+      responseDiv.style.color = 'green';
       document.getElementById('contactForm').reset();
     } else {
-      responseDiv.textContent = data.message || "Error sending message. Please try again.";
-      responseDiv.style.color = "red";
+      responseDiv.textContent = data.message || 'Error sending message. Please try again.';
+      responseDiv.style.color = 'red';
     }
   } catch (err) {
     console.error('Error:', err);
-    responseDiv.textContent = "Network error. Please check your connection and try again.";
-    responseDiv.style.color = "red";
+    responseDiv.textContent = 'Network error. Please check your connection and try again.';
+    responseDiv.style.color = 'red';
   }
 });

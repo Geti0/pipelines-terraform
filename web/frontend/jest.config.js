@@ -1,6 +1,8 @@
-module.exports = {
-  testEnvironment: "jsdom",
+export default {
+  testEnvironment: 'jsdom',
   collectCoverage: true,
+  coverageDirectory: 'coverage',
+  coverageReporters: ['text', 'lcov', 'html'],
   coverageThreshold: {
     global: {
       branches: 70,
