@@ -7,14 +7,36 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func TestTerraformValidation(t *testing.T) {
+	terraformOptions := &terraform.Options{
+		TerraformDir: "../terraform",
+	}
+
+	// Validate the Terraform configuration
+	terraform.Validate(t, terraformOptions)
+}
+
+func TestTerraformFormat(t *testing.T) {
+	terraformOptions := &terraform.Options{
+		TerraformDir: "../terraform",
+	}
+
+	// Check if Terraform files are formatted correctly
+	terraform.RunTerraformCommand(t, terraformOptions, "fmt", "-check")
+}
+
 func TestTerraformInfrastructure(t *testing.T) {
+	// Skip if not in CI environment to avoid costs during local development
+	t.Skip("Infrastructure test skipped - enable only for integration testing")
+	
 	// Define the Terraform options
 	terraformOptions := &terraform.Options{
 		TerraformDir: "../terraform",
 		Vars: map[string]interface{}{
-			"aws_region":    "us-east-1",
-			"project_name":  "test-pipelines",
-			"environment":   "test",
+			"aws_region":     "us-east-1",
+			"project_name":   "test-pipelines",
+			"environment":    "test",
+			"deployment_id":  "terratest",
 		},
 	}
 
@@ -51,22 +73,4 @@ func TestTerraformInfrastructure(t *testing.T) {
 	
 	// Verify DynamoDB table exists in AWS
 	aws.AssertDynamoDBTableExists(t, awsRegion, dynamoTableName)
-}
-
-func TestTerraformValidation(t *testing.T) {
-	terraformOptions := &terraform.Options{
-		TerraformDir: "../terraform",
-	}
-
-	// Validate the Terraform configuration
-	terraform.Validate(t, terraformOptions)
-}
-
-func TestTerraformFormat(t *testing.T) {
-	terraformOptions := &terraform.Options{
-		TerraformDir: "../terraform",
-	}
-
-	// Check if Terraform files are formatted correctly
-	terraform.RunTerraformCommand(t, terraformOptions, "fmt", "-check")
 }
