@@ -13,11 +13,19 @@ resource "aws_api_gateway_resource" "contact" {
   path_part   = "contact"
 }
 
+resource "aws_api_gateway_request_validator" "validator" {
+  name                        = "contact-validator"
+  rest_api_id                 = aws_api_gateway_rest_api.contact_api.id
+  validate_request_body       = true
+  validate_request_parameters = true
+}
+
 resource "aws_api_gateway_method" "post_contact" {
   rest_api_id   = aws_api_gateway_rest_api.contact_api.id
   resource_id   = aws_api_gateway_resource.contact.id
   http_method   = "POST"
-  authorization = "NONE"
+  authorization = "AWS_IAM"
+  request_validator_id = aws_api_gateway_request_validator.validator.id
 }
 
 resource "aws_api_gateway_integration" "lambda_contact" {
