@@ -1,0 +1,8 @@
+body { font-family: Arial, sans-serif; margin: 2em; background: #f9f9f9; }
+h1 { color: #333; }
+nav { margin-bottom: 1em; }
+form { background: #fff; padding: 1em; border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+label { display: block; margin-top: 1em; }
+input, textarea { width: 100%; padding: 0.5em; margin-top: 0.5em; }
+button { margin-top: 1em; padding: 0.5em 1em; background: #007bff; color: #fff; border: none; border-radius: 3px; cursor: pointer; }
+#response { margin-top: 1em; color: green; }

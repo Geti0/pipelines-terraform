@@ -1,0 +1,30 @@
+version: 0.2
+phases:
+  install:
+    commands:
+      - cd web/frontend
+      - npm install
+  pre_build:
+    commands:
+      - npx eslint .
+      - npx stylelint "**/*.css"
+      - npx jest --coverage
+      - cd ../lambda
+      - npm install
+      - npx eslint index.js
+      - npx jest --coverage
+  build:
+    commands:
+      - cd ../frontend
+      - npx vite build
+  post_build:
+    commands:
+      - aws s3 sync dist s3://my-website-hosting-bucket-geti0-2025 --delete
+      - aws cloudfront create-invalidation --distribution-id $CLOUDFRONT_DISTRIBUTION_ID --paths "/*"
+      - cd ../lambda
+      - powershell Compress-Archive -Path index.js,node_modules,package.json -DestinationPath lambda.zip
+      - cd ../../infra/terraform/lambda
+      - terraform apply -auto-approve
+artifacts:
+  files:
+    - '**/*'

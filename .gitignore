@@ -1,0 +1,50 @@
+# Node modules
+node_modules/
+
+# Lambda build artifacts
+lambda.zip
+
+# Terraform state
+*.tfstate
+*.tfstate.backup
+.terraform/
+.terraform.lock.hcl
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Test coverage
+coverage.out
+
+# Ignore IDE/editor files
+
+# Terraform crash logs and plans
+.terraform.crash.log
+*.tfplan
+
+# AWS credentials/config
+.aws/
+
+# Python artifacts
+__pycache__/
+*.pyc
+
+# Mac/Linux system files
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows system files
+ehthumbs.db
+Desktop.ini
+
+.vscode/
+.idea/
+
+# Ignore other large files
+*.bak
+*.tmp

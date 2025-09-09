@@ -1,0 +1,65 @@
+name: Web Pipeline
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install dependencies
+        run: |
+          cd frontend
+          npm install
+      - name: Lint JS
+        run: |
+          cd frontend
+          npx eslint .
+      - name: Lint CSS
+        run: |
+          cd frontend
+          npx stylelint "**/*.css"
+      - name: Run frontend tests
+        run: |
+          cd frontend
+          npx jest --coverage
+      - name: Build static site
+        run: |
+          cd frontend
+          npx vite build
+      - name: Deploy to S3
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+        run: |
+          aws s3 sync frontend/dist s3://my-website-hosting-bucket-geti0-2025 --delete
+      - name: Invalidate CloudFront
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+        run: |
+          aws cloudfront create-invalidation --distribution-id ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }} --paths "/*"
+      - name: Lint Lambda
+        run: |
+          cd terraform/lambda
+          npx eslint index.js
+      - name: Run Lambda tests
+        run: |
+          cd terraform/lambda
+          npx jest --coverage
+      - name: Deploy Lambda
+        run: |
+          cd terraform/lambda
+          npm install
+          powershell Compress-Archive -Path index.js,node_modules,package.json -DestinationPath lambda.zip
+          cd ../..
+          terraform apply -auto-approve

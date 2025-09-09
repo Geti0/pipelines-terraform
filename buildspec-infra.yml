@@ -1,0 +1,25 @@
+version: 0.2
+phases:
+  install:
+    commands:
+      - cd infra/terraform/lambda
+      - terraform init
+  pre_build:
+    commands:
+      - terraform fmt -check
+      - terraform validate
+      - tflint
+      - checkov -d .
+      - cd ../../../test/terratest
+      - go test -v -coverprofile=coverage.out -covermode=atomic
+      - go tool cover -func=coverage.out | grep -E 'total:' | awk '{print $3}' | grep -qE '([6-9][0-9]|100)\.\d+%' || exit 1
+  build:
+    commands:
+      - cd ../../terraform/lambda
+      - terraform plan
+  post_build:
+    commands:
+      - terraform apply -auto-approve
+artifacts:
+  files:
+    - '**/*'
