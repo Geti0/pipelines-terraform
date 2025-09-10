@@ -350,15 +350,15 @@ resource "aws_codebuild_project" "infrastructure" {
     type      = "CODEPIPELINE"
     buildspec = "buildspec-infra.yml"
   }
-  
+
   # Add encryption configuration
   encryption_key = "arn:aws:kms:${var.aws_region}:${data.aws_caller_identity.current.account_id}:alias/aws/s3"
-  
+
   # Add CloudWatch Logs configuration
   logs_config {
     cloudwatch_logs {
       group_name  = "/aws/codebuild/${var.project_name}-${var.deployment_id}-infrastructure"
-      stream_name = "${random_id.resource_suffix.hex}"
+      stream_name = random_id.resource_suffix.hex
     }
   }
 }
@@ -390,15 +390,15 @@ resource "aws_codebuild_project" "web" {
     type      = "CODEPIPELINE"
     buildspec = "buildspec-web.yml"
   }
-  
+
   # Add encryption configuration
   encryption_key = "arn:aws:kms:${var.aws_region}:${data.aws_caller_identity.current.account_id}:alias/aws/s3"
-  
+
   # Add CloudWatch Logs configuration
   logs_config {
     cloudwatch_logs {
       group_name  = "/aws/codebuild/${var.project_name}-${var.deployment_id}-web"
-      stream_name = "${random_id.resource_suffix.hex}"
+      stream_name = random_id.resource_suffix.hex
     }
   }
 }
