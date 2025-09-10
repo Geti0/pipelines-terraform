@@ -1,5 +1,8 @@
 # AWS CodePipeline for orchestrating infrastructure and web pipelines
 
+# Get current AWS account ID
+data "aws_caller_identity" "current" {}
+
 # Variables needed for CodePipeline
 variable "github_token" {
   description = "GitHub personal access token for repository access"
@@ -347,6 +350,17 @@ resource "aws_codebuild_project" "infrastructure" {
     type      = "CODEPIPELINE"
     buildspec = "buildspec-infra.yml"
   }
+  
+  # Add encryption configuration
+  encryption_key = "arn:aws:kms:${var.aws_region}:${data.aws_caller_identity.current.account_id}:alias/aws/s3"
+  
+  # Add CloudWatch Logs configuration
+  logs_config {
+    cloudwatch_logs {
+      group_name  = "/aws/codebuild/${var.project_name}-${var.deployment_id}-infrastructure"
+      stream_name = "${random_id.resource_suffix.hex}"
+    }
+  }
 }
 
 # CodeBuild project for Web
@@ -375,6 +389,17 @@ resource "aws_codebuild_project" "web" {
   source {
     type      = "CODEPIPELINE"
     buildspec = "buildspec-web.yml"
+  }
+  
+  # Add encryption configuration
+  encryption_key = "arn:aws:kms:${var.aws_region}:${data.aws_caller_identity.current.account_id}:alias/aws/s3"
+  
+  # Add CloudWatch Logs configuration
+  logs_config {
+    cloudwatch_logs {
+      group_name  = "/aws/codebuild/${var.project_name}-${var.deployment_id}-web"
+      stream_name = "${random_id.resource_suffix.hex}"
+    }
   }
 }
 
