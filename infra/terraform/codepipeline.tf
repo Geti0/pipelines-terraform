@@ -39,14 +39,49 @@ resource "aws_s3_bucket" "pipeline_artifacts" {
   }
 }
 
+# KMS key for pipeline artifacts encryption
+resource "aws_kms_key" "pipeline_artifacts_key" {
+  description             = "KMS key for pipeline artifacts encryption"
+  deletion_window_in_days = 10
+  enable_key_rotation     = true
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "Enable IAM User Permissions"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      }
+    ]
+  })
+
+  tags = {
+    Name        = "${var.project_name}-pipeline-key"
+    Environment = var.environment
+  }
+}
+
+# KMS key alias for easy reference
+resource "aws_kms_alias" "pipeline_key_alias" {
+  name          = "alias/${var.project_name}-pipeline-key"
+  target_key_id = aws_kms_key.pipeline_artifacts_key.key_id
+}
+
 # S3 bucket encryption for pipeline artifacts
 resource "aws_s3_bucket_server_side_encryption_configuration" "pipeline_encryption" {
   bucket = aws_s3_bucket.pipeline_artifacts.id
 
   rule {
     apply_server_side_encryption_by_default {
-      sse_algorithm = "AES256"
+      sse_algorithm     = "aws:kms"
+      kms_master_key_id = aws_kms_key.pipeline_artifacts_key.arn
     }
+    bucket_key_enabled = true
   }
 }
 
@@ -99,6 +134,17 @@ resource "aws_iam_role_policy" "codepipeline_policy" {
           aws_codebuild_project.infrastructure.arn,
           aws_codebuild_project.web.arn
         ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "kms:DescribeKey",
+          "kms:GenerateDataKey*",
+          "kms:Encrypt",
+          "kms:ReEncrypt*",
+          "kms:Decrypt"
+        ],
+        Resource = aws_kms_key.pipeline_artifacts_key.arn
       }
     ]
   })
@@ -150,6 +196,17 @@ resource "aws_iam_role_policy" "codebuild_infra_policy" {
           aws_s3_bucket.pipeline_artifacts.arn,
           "${aws_s3_bucket.pipeline_artifacts.arn}/*"
         ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "kms:DescribeKey",
+          "kms:GenerateDataKey*",
+          "kms:Encrypt",
+          "kms:ReEncrypt*",
+          "kms:Decrypt"
+        ],
+        Resource = aws_kms_key.pipeline_artifacts_key.arn
       },
       {
         Effect = "Allow"
@@ -294,6 +351,17 @@ resource "aws_iam_role_policy" "codebuild_web_policy" {
       {
         Effect = "Allow"
         Action = [
+          "kms:DescribeKey",
+          "kms:GenerateDataKey*",
+          "kms:Encrypt",
+          "kms:ReEncrypt*",
+          "kms:Decrypt"
+        ],
+        Resource = aws_kms_key.pipeline_artifacts_key.arn
+      },
+      {
+        Effect = "Allow"
+        Action = [
           "lambda:UpdateFunctionCode"
         ],
         Resource = "arn:aws:lambda:*:*:function:${var.project_name}-*"
@@ -352,7 +420,7 @@ resource "aws_codebuild_project" "infrastructure" {
   }
 
   # Add encryption configuration
-  encryption_key = "arn:aws:kms:${var.aws_region}:${data.aws_caller_identity.current.account_id}:alias/aws/s3"
+  encryption_key = aws_kms_key.pipeline_artifacts_key.arn
 
   # Add CloudWatch Logs configuration
   logs_config {
@@ -392,7 +460,7 @@ resource "aws_codebuild_project" "web" {
   }
 
   # Add encryption configuration
-  encryption_key = "arn:aws:kms:${var.aws_region}:${data.aws_caller_identity.current.account_id}:alias/aws/s3"
+  encryption_key = aws_kms_key.pipeline_artifacts_key.arn
 
   # Add CloudWatch Logs configuration
   logs_config {
@@ -411,6 +479,11 @@ resource "aws_codepipeline" "pipeline" {
   artifact_store {
     location = aws_s3_bucket.pipeline_artifacts.bucket
     type     = "S3"
+
+    encryption_key {
+      id   = aws_kms_key.pipeline_artifacts_key.arn
+      type = "KMS"
+    }
   }
 
   # Source Stage - GitHub
