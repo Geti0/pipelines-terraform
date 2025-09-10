@@ -3,6 +3,12 @@
 
 This project implements two AWS CI/CD pipelines that automate infrastructure provisioning and application deployment on AWS using Terraform, S3, CloudFront, Lambda, API Gateway, and DynamoDB.
 
+## Project Status
+
+✅ Successfully implemented pipeline orchestration with CodePipeline
+✅ Infrastructure and web pipelines now run in proper sequence
+✅ Web pipeline has access to infrastructure outputs
+
 ## Project Structure
 
 ```
