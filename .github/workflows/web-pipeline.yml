@@ -1,25 +1,110 @@
-name: Web Pipeline - DISABLED
+name: Web Pipeline
 
-# This pipeline is DISABLED in favor of AWS CodePipeline
-# The CodePipeline handles both infrastructure and web deployment
-# See infra/terraform/codepipeline.tf for the new pipeline configuration
+# This pipeline builds and deploys the frontend and Lambda function
+# Note: Run the Terraform Pipeline first to create AWS infrastructure
+# Also: AWS CodePipeline provides an alternative deployment method
 
 on:
-  # Commenting out triggers to disable the workflow
-  # push:
-  #   branches: [ main ]
-  # pull_request:
-  #   branches: [ main ]
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
   workflow_dispatch:
-    # Only allow manual triggering if needed for testing
+    # Also allow manual triggering
 
 jobs:
-  disabled:
+  build-and-deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Pipeline Disabled Notice
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+      
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_wrapper: false
+      
+      - name: Install frontend dependencies
         run: |
-          echo "🚫 This GitHub Actions pipeline is DISABLED"
-          echo "🚀 AWS CodePipeline is now handling deployments"
-          echo "📋 Check the AWS Console for pipeline status"
-          echo "🔧 CodePipeline configuration: infra/terraform/codepipeline.tf"
+          cd web/frontend
+          npm install
+      
+      - name: Lint JS
+        run: |
+          cd web/frontend
+          npx eslint .
+      
+      - name: Lint CSS
+        run: |
+          cd web/frontend
+          npx stylelint "**/*.css"
+      
+      - name: Run frontend tests
+        run: |
+          cd web/frontend
+          npx jest --coverage
+      
+      - name: Build static site
+        run: |
+          cd web/frontend
+          npx vite build
+      
+      - name: Install Lambda dependencies
+        run: |
+          cd web/lambda
+          npm install
+      
+      - name: Lint Lambda
+        run: |
+          cd web/lambda
+          npx eslint index.js
+      
+      - name: Run Lambda tests
+        run: |
+          cd web/lambda
+          npx jest --coverage
+      
+      - name: Check if infrastructure exists
+        id: infra-check
+        run: |
+          cd infra/terraform
+          terraform init
+          # Check if terraform state has resources and outputs exist
+          if terraform output s3_bucket_name > /dev/null 2>&1; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "✅ Infrastructure exists, proceeding with deployment"
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "⚠️  Infrastructure not deployed yet, skipping deployment steps"
+            echo "Run the terraform pipeline first to create AWS resources"
+          fi
+      
+      - name: Get Terraform outputs
+        id: terraform-outputs
+        if: steps.infra-check.outputs.exists == 'true'
+        run: |
+          cd infra/terraform
+          echo "s3_bucket=$(terraform output -raw s3_bucket_name)" >> $GITHUB_OUTPUT
+          echo "cloudfront_id=$(terraform output -raw cloudfront_distribution_id)" >> $GITHUB_OUTPUT
+      
+      - name: Deploy to S3
+        if: steps.infra-check.outputs.exists == 'true'
+        run: |
+          aws s3 sync web/frontend/dist s3://${{ steps.terraform-outputs.outputs.s3_bucket }} --delete
+      
+      - name: Invalidate CloudFront
+        if: steps.infra-check.outputs.exists == 'true'
+        run: |
+          aws cloudfront create-invalidation --distribution-id ${{ steps.terraform-outputs.outputs.cloudfront_id }} --paths "/*"
