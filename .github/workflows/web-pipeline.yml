@@ -95,43 +95,61 @@ jobs:
           while [ $retry_count -lt $max_retries ]; do
             echo "Attempt $((retry_count + 1)) to get infrastructure outputs..."
             
-            if terraform output s3_bucket_name > /dev/null 2>&1; then
-              echo "✅ Infrastructure found, proceeding with deployment"
+            # Check if state has any resources first
+            if terraform state list > /dev/null 2>&1 && [ "$(terraform state list | wc -l)" -gt 0 ]; then
+              echo "✅ Terraform state found with resources, checking outputs..."
               
-              # Get outputs
-              S3_BUCKET=$(terraform output -raw s3_bucket_name)
-              CLOUDFRONT_ID=$(terraform output -raw cloudfront_distribution_id)
+              # Try to get outputs with better error handling
+              S3_BUCKET=$(terraform output -raw s3_bucket_name 2>/dev/null || echo "")
+              CLOUDFRONT_ID=$(terraform output -raw cloudfront_distribution_id 2>/dev/null || echo "")
               LAMBDA_NAME=$(terraform output -raw lambda_function_name 2>/dev/null || echo "")
               
-              echo "S3 Bucket: $S3_BUCKET"
-              echo "CloudFront ID: $CLOUDFRONT_ID"
-              echo "Lambda Function: $LAMBDA_NAME"
+              # Clean any box-drawing characters or warning text
+              S3_BUCKET=$(echo "$S3_BUCKET" | sed 's/[╷│╵]//g' | grep -v "Warning" | grep -v "state file" | head -n1 | tr -d '\n')
+              CLOUDFRONT_ID=$(echo "$CLOUDFRONT_ID" | sed 's/[╷│╵]//g' | grep -v "Warning" | grep -v "state file" | head -n1 | tr -d '\n')
+              LAMBDA_NAME=$(echo "$LAMBDA_NAME" | sed 's/[╷│╵]//g' | grep -v "Warning" | grep -v "state file" | head -n1 | tr -d '\n')
               
-              # Deploy to S3
-              echo "Deploying frontend to S3..."
-              aws s3 sync ../../web/frontend/dist s3://$S3_BUCKET --delete
+              echo "S3 Bucket: '$S3_BUCKET'"
+              echo "CloudFront ID: '$CLOUDFRONT_ID'"
+              echo "Lambda Function: '$LAMBDA_NAME'"
               
-              # Update Lambda if function name is available
-              if [ -n "$LAMBDA_NAME" ]; then
-                echo "Creating Lambda deployment package..."
-                cd ../../web/lambda
-                zip -r ../lambda_function.zip . -x "coverage/*" "__tests__/*" "*.test.js" "jest.config.js" "eslint.config.js"
+              # Check if we have valid values (not empty and not containing "Warning")
+              if [ -n "$S3_BUCKET" ] && [ -n "$CLOUDFRONT_ID" ] && [[ "$S3_BUCKET" != *"Warning"* ]] && [[ "$CLOUDFRONT_ID" != *"Warning"* ]]; then
+                echo "✅ Valid infrastructure outputs found, proceeding with deployment"
                 
-                echo "Updating Lambda function..."
-                aws lambda update-function-code --function-name $LAMBDA_NAME --zip-file fileb://../lambda_function.zip
-                cd ../..
+                # Deploy to S3
+                echo "Deploying frontend to S3..."
+                aws s3 sync ../../web/frontend/dist s3://$S3_BUCKET --delete
+                
+                # Update Lambda if function name is available
+                if [ -n "$LAMBDA_NAME" ] && [[ "$LAMBDA_NAME" != *"Warning"* ]]; then
+                  echo "Creating Lambda deployment package..."
+                  cd ../../web/lambda
+                  zip -r ../lambda_function.zip . -x "coverage/*" "__tests__/*" "*.test.js" "jest.config.js" "eslint.config.js"
+                  
+                  echo "Updating Lambda function..."
+                  aws lambda update-function-code --function-name $LAMBDA_NAME --zip-file fileb://../lambda_function.zip
+                  cd ../../infra/terraform
+                else
+                  echo "Lambda function name not available, skipping Lambda update"
+                fi
+                
+                # Invalidate CloudFront
+                echo "Invalidating CloudFront cache..."
+                aws cloudfront create-invalidation --distribution-id $CLOUDFRONT_ID --paths "/*"
+                
+                echo "✅ Web deployment completed successfully!"
+                exit 0
               else
-                echo "Lambda function name not available, skipping Lambda update"
+                echo "⚠️  Infrastructure outputs not ready yet (empty or contain warnings)..."
+                retry_count=$((retry_count + 1))
+                if [ $retry_count -lt $max_retries ]; then
+                  echo "Waiting 30 seconds before retry..."
+                  sleep 30
+                fi
               fi
-              
-              # Invalidate CloudFront
-              echo "Invalidating CloudFront cache..."
-              aws cloudfront create-invalidation --distribution-id $CLOUDFRONT_ID --paths "/*"
-              
-              echo "✅ Web deployment completed successfully!"
-              exit 0
             else
-              echo "⚠️  Infrastructure not ready yet, waiting..."
+              echo "⚠️  No Terraform state found, waiting for infrastructure deployment..."
               retry_count=$((retry_count + 1))
               if [ $retry_count -lt $max_retries ]; then
                 sleep 30  # Wait 30 seconds before retry
@@ -141,4 +159,5 @@ jobs:
           
           echo "❌ Infrastructure still not available after $max_retries attempts"
           echo "Please ensure the Terraform pipeline completed successfully"
+          echo "Try running 'terraform refresh' in the infra/terraform directory"
           exit 1
