@@ -36,10 +36,15 @@ jobs:
       
       - name: Terraform Validate
         run: terraform validate
+        
       - name: TFLint
         uses: terraform-linters/setup-tflint@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          
       - name: Run TFLint
         run: tflint --init && tflint
+        
       - name: Checkov Security Scan
         uses: bridgecrewio/checkov-action@v12
         with:
