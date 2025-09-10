@@ -55,12 +55,25 @@ phases:
       
       # Export infrastructure outputs for the web pipeline
       - echo "Exporting infrastructure outputs..."
-      - terraform output -json > ../../infrastructure-outputs.json
-      - terraform output -raw s3_bucket_name > ../../s3_bucket_name.txt
-      - terraform output -raw cloudfront_distribution_id > ../../cloudfront_distribution_id.txt  
-      - terraform output -raw api_gateway_url > ../../api_gateway_url.txt
-      - terraform output -raw lambda_function_name > ../../lambda_function_name.txt
-      - echo "Infrastructure outputs exported successfully"
+      - echo "Checking if outputs are available..."
+      - terraform output || echo "No outputs available yet"
+      - |
+        if terraform output > /dev/null 2>&1; then
+          echo "Outputs found, exporting..."
+          terraform output -json > ../../infrastructure-outputs.json || echo "{}" > ../../infrastructure-outputs.json
+          terraform output -raw s3_bucket_name > ../../s3_bucket_name.txt 2>/dev/null || echo "" > ../../s3_bucket_name.txt
+          terraform output -raw cloudfront_distribution_id > ../../cloudfront_distribution_id.txt 2>/dev/null || echo "" > ../../cloudfront_distribution_id.txt
+          terraform output -raw api_gateway_url > ../../api_gateway_url.txt 2>/dev/null || echo "" > ../../api_gateway_url.txt
+          terraform output -raw lambda_function_name > ../../lambda_function_name.txt 2>/dev/null || echo "" > ../../lambda_function_name.txt
+          echo "Infrastructure outputs exported successfully"
+        else
+          echo "No outputs found, creating empty files..."
+          echo "{}" > ../../infrastructure-outputs.json
+          echo "" > ../../s3_bucket_name.txt
+          echo "" > ../../cloudfront_distribution_id.txt
+          echo "" > ../../api_gateway_url.txt
+          echo "" > ../../lambda_function_name.txt
+        fi
       
 artifacts:
   files:

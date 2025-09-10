@@ -46,15 +46,28 @@ phases:
     commands:
       - echo Starting post-build phase...
       - echo Getting infrastructure outputs from artifacts...
-      - S3_BUCKET=$(cat s3_bucket_name.txt | tr -d '"')
-      - CLOUDFRONT_ID=$(cat cloudfront_distribution_id.txt | tr -d '"')
-      - API_GATEWAY_URL=$(cat api_gateway_url.txt | tr -d '"')
-      - LAMBDA_FUNCTION_NAME=$(cat lambda_function_name.txt | tr -d '"')
-      
-      - echo "S3 Bucket: $S3_BUCKET"
-      - echo "CloudFront Distribution: $CLOUDFRONT_ID"  
-      - echo "API Gateway URL: $API_GATEWAY_URL"
-      - echo "Lambda Function: $LAMBDA_FUNCTION_NAME"
+      - |
+        if [ -f "s3_bucket_name.txt" ] && [ -s "s3_bucket_name.txt" ]; then
+          S3_BUCKET=$(cat s3_bucket_name.txt | tr -d '"' | tr -d '\n')
+          CLOUDFRONT_ID=$(cat cloudfront_distribution_id.txt | tr -d '"' | tr -d '\n')
+          API_GATEWAY_URL=$(cat api_gateway_url.txt | tr -d '"' | tr -d '\n')
+          LAMBDA_FUNCTION_NAME=$(cat lambda_function_name.txt | tr -d '"' | tr -d '\n')
+          
+          echo "S3 Bucket: $S3_BUCKET"
+          echo "CloudFront Distribution: $CLOUDFRONT_ID"  
+          echo "API Gateway URL: $API_GATEWAY_URL"
+          echo "Lambda Function: $LAMBDA_FUNCTION_NAME"
+          
+          if [ -n "$S3_BUCKET" ] && [ -n "$CLOUDFRONT_ID" ] && [ -n "$API_GATEWAY_URL" ] && [ -n "$LAMBDA_FUNCTION_NAME" ]; then
+            echo "All infrastructure outputs available, proceeding with deployment..."
+          else
+            echo "Some infrastructure outputs are missing, skipping deployment..."
+            exit 1
+          fi
+        else
+          echo "Infrastructure output files not found or empty, skipping deployment..."
+          exit 1
+        fi
       
       - echo Updating frontend with API Gateway URL...
       - cd web/frontend/dist

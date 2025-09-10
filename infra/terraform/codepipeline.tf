@@ -460,12 +460,6 @@ resource "aws_codebuild_project" "web" {
     type = "CODEPIPELINE"
   }
 
-  # Configure multiple input sources
-  secondary_sources {
-    type              = "CODEPIPELINE"
-    source_identifier = "infrastructure_artifacts"
-  }
-
   environment {
     compute_type                = "BUILD_GENERAL1_SMALL"
     image                       = "aws/codebuild/amazonlinux2-x86_64-standard:3.0"
