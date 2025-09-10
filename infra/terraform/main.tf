@@ -465,3 +465,8 @@ output "dynamodb_table_name" {
   description = "DynamoDB table name"
   value       = aws_dynamodb_table.contact_submissions.name
 }
+
+output "lambda_function_name" {
+  description = "Lambda function name"
+  value       = aws_lambda_function.contact_form.function_name
+}

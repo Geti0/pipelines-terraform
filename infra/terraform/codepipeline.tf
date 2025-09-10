@@ -460,6 +460,12 @@ resource "aws_codebuild_project" "web" {
     type = "CODEPIPELINE"
   }
 
+  # Configure multiple input sources
+  secondary_sources {
+    type              = "CODEPIPELINE"
+    source_identifier = "infrastructure_artifacts"
+  }
+
   environment {
     compute_type                = "BUILD_GENERAL1_SMALL"
     image                       = "aws/codebuild/amazonlinux2-x86_64-standard:3.0"
@@ -554,11 +560,12 @@ resource "aws_codepipeline" "pipeline" {
       category        = "Build"
       owner           = "AWS"
       provider        = "CodeBuild"
-      input_artifacts = ["source_code"]
+      input_artifacts = ["source_code", "infrastructure_artifacts"]
       version         = "1"
 
       configuration = {
-        ProjectName = aws_codebuild_project.web.name
+        ProjectName   = aws_codebuild_project.web.name
+        PrimarySource = "source_code"
       }
     }
   }

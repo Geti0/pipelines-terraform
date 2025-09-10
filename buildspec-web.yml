@@ -45,14 +45,19 @@ phases:
   post_build:
     commands:
       - echo Starting post-build phase...
-      - echo Getting infrastructure outputs...
-      - cd ../../infra/terraform
-      - S3_BUCKET=$(terraform output -raw s3_bucket_name)
-      - CLOUDFRONT_ID=$(terraform output -raw cloudfront_distribution_id)
-      - API_GATEWAY_URL=$(terraform output -raw api_gateway_url)
+      - echo Getting infrastructure outputs from artifacts...
+      - S3_BUCKET=$(cat s3_bucket_name.txt | tr -d '"')
+      - CLOUDFRONT_ID=$(cat cloudfront_distribution_id.txt | tr -d '"')
+      - API_GATEWAY_URL=$(cat api_gateway_url.txt | tr -d '"')
+      - LAMBDA_FUNCTION_NAME=$(cat lambda_function_name.txt | tr -d '"')
+      
+      - echo "S3 Bucket: $S3_BUCKET"
+      - echo "CloudFront Distribution: $CLOUDFRONT_ID"  
+      - echo "API Gateway URL: $API_GATEWAY_URL"
+      - echo "Lambda Function: $LAMBDA_FUNCTION_NAME"
       
       - echo Updating frontend with API Gateway URL...
-      - cd ../../web/frontend/dist
+      - cd web/frontend/dist
       - sed -i "s|API_GATEWAY_URL_PLACEHOLDER|$API_GATEWAY_URL|g" *.js || echo "No JS files to update"
       - find . -name "*.js" -exec sed -i "s|API_GATEWAY_URL_PLACEHOLDER|$API_GATEWAY_URL|g" {} \; || echo "No JS files found"
       
@@ -64,8 +69,7 @@ phases:
       - zip -r ../lambda_function.zip . -x "coverage/*" "__tests__/*" "*.test.js" "jest.config.js" "eslint.config.js"
       
       - echo Updating Lambda function...
-      - cd ../../infra/terraform
-      - terraform apply -auto-approve -target=aws_lambda_function.contact_form
+      - aws lambda update-function-code --function-name $LAMBDA_FUNCTION_NAME --zip-file fileb://../lambda_function.zip
       
       - echo Invalidating CloudFront cache...
       - aws cloudfront create-invalidation --distribution-id $CLOUDFRONT_ID --paths "/*"
