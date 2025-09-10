@@ -1,5 +1,55 @@
 # AWS CodePipeline for orchestrating infrastructure and web pipelines
 
+# Get current AWS account ID for KMS policy
+data "aws_caller_identity" "current" {}
+
+# KMS Key for CodeBuild and CodePipeline encryption (without tags to avoid permission issues)
+resource "aws_kms_key" "pipeline_key" {
+  description             = "KMS key for CodeBuild and CodePipeline encryption"
+  deletion_window_in_days = 7
+  enable_key_rotation     = true
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Id      = "key-policy-codepipeline"
+    Statement = [
+      {
+        Sid    = "Enable IAM User Permissions"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      },
+      {
+        Sid    = "Allow CodeBuild and CodePipeline"
+        Effect = "Allow"
+        Principal = {
+          Service = [
+            "codebuild.amazonaws.com",
+            "codepipeline.amazonaws.com"
+          ]
+        }
+        Action = [
+          "kms:Decrypt",
+          "kms:DescribeKey",
+          "kms:Encrypt",
+          "kms:GenerateDataKey*",
+          "kms:ReEncrypt*"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+  # No tags to avoid kms:TagResource permission issues
+}
+
+resource "aws_kms_alias" "pipeline_key_alias" {
+  name          = "alias/${var.project_name}-${var.deployment_id}-pipeline-key-${random_id.resource_suffix.hex}"
+  target_key_id = aws_kms_key.pipeline_key.key_id
+}
+
 # Variables needed for CodePipeline
 variable "github_token" {
   description = "GitHub personal access token for repository access"
@@ -95,6 +145,19 @@ resource "aws_iam_role_policy" "codepipeline_policy" {
         Resource = [
           aws_codebuild_project.infrastructure.arn,
           aws_codebuild_project.web.arn
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "kms:Decrypt",
+          "kms:DescribeKey",
+          "kms:Encrypt",
+          "kms:GenerateDataKey*",
+          "kms:ReEncrypt*"
+        ],
+        Resource = [
+          aws_kms_key.pipeline_key.arn
         ]
       }
     ]
@@ -233,6 +296,19 @@ resource "aws_iam_role_policy" "codebuild_infra_policy" {
           "cloudfront:GetResponseHeadersPolicy"
         ],
         Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "kms:Decrypt",
+          "kms:DescribeKey",
+          "kms:Encrypt",
+          "kms:GenerateDataKey*",
+          "kms:ReEncrypt*"
+        ],
+        Resource = [
+          aws_kms_key.pipeline_key.arn
+        ]
       }
     ]
   })
@@ -310,6 +386,19 @@ resource "aws_iam_role_policy" "codebuild_web_policy" {
           "s3:GetObject"
         ],
         Resource = "${aws_s3_bucket.website.arn}/*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "kms:Decrypt",
+          "kms:DescribeKey",
+          "kms:Encrypt",
+          "kms:GenerateDataKey*",
+          "kms:ReEncrypt*"
+        ],
+        Resource = [
+          aws_kms_key.pipeline_key.arn
+        ]
       }
     ]
   })
@@ -355,6 +444,9 @@ resource "aws_codebuild_project" "infrastructure" {
       stream_name = random_id.resource_suffix.hex
     }
   }
+
+  # Add encryption configuration using KMS
+  encryption_key = aws_kms_key.pipeline_key.arn
 }
 
 # CodeBuild project for Web
@@ -392,6 +484,9 @@ resource "aws_codebuild_project" "web" {
       stream_name = random_id.resource_suffix.hex
     }
   }
+
+  # Add encryption configuration using KMS
+  encryption_key = aws_kms_key.pipeline_key.arn
 }
 
 # CodePipeline
@@ -402,6 +497,11 @@ resource "aws_codepipeline" "pipeline" {
   artifact_store {
     location = aws_s3_bucket.pipeline_artifacts.bucket
     type     = "S3"
+
+    encryption_key {
+      id   = aws_kms_key.pipeline_key.arn
+      type = "KMS"
+    }
   }
 
   # Source Stage - GitHub
