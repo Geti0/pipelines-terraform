@@ -289,9 +289,9 @@ resource "aws_lambda_function" "contact_form" {
     mode = "Active"
   }
 
-  # Add timeout configuration
-  timeout     = 10  # 10 seconds
-  memory_size = 256 # 256 MB
+  # Add timeout configuration - reduced for faster deployment
+  timeout     = 5   # 5 seconds (reduced from 10)
+  memory_size = 128 # 128 MB (reduced from 256)
 
   # Reserved concurrency removed due to AWS account limits
   # reserved_concurrent_executions = 10
