@@ -11,19 +11,19 @@ variable "github_token" {
 variable "github_owner" {
   description = "GitHub repository owner"
   type        = string
-  default     = "Geti0"  # Your GitHub username
+  default     = "Geti0" # Your GitHub username
 }
 
 variable "github_repo" {
   description = "GitHub repository name"
   type        = string
-  default     = "pipelines-terraform"  # Your repository name
+  default     = "pipelines-terraform" # Your repository name
 }
 
 variable "github_branch" {
   description = "GitHub branch to watch"
   type        = string
-  default     = "main"  # Changed from develop to main
+  default     = "main" # Changed from develop to main
 }
 
 # S3 bucket for CodePipeline artifacts
