@@ -92,7 +92,10 @@ resource "aws_iam_role_policy" "codepipeline_policy" {
           "codebuild:BatchGetBuilds",
           "codebuild:StartBuild"
         ],
-        Resource = "*"
+        Resource = [
+          aws_codebuild_project.infrastructure.arn,
+          aws_codebuild_project.web.arn
+        ]
       }
     ]
   })
@@ -131,7 +134,7 @@ resource "aws_iam_role_policy" "codebuild_infra_policy" {
           "logs:CreateLogStream",
           "logs:PutLogEvents"
         ],
-        Resource = "*"
+        Resource = "arn:aws:logs:*:*:*"
       },
       {
         Effect = "Allow"
@@ -148,13 +151,86 @@ resource "aws_iam_role_policy" "codebuild_infra_policy" {
       {
         Effect = "Allow"
         Action = [
-          "iam:*",
-          "s3:*",
-          "lambda:*",
-          "apigateway:*",
-          "dynamodb:*",
-          "cloudfront:*",
-          "route53:*"
+          "iam:CreateRole",
+          "iam:DeleteRole",
+          "iam:PutRolePolicy",
+          "iam:DeleteRolePolicy",
+          "iam:GetRole",
+          "iam:GetRolePolicy",
+          "iam:PassRole",
+          "iam:TagRole",
+          "iam:AttachRolePolicy",
+          "iam:DetachRolePolicy"
+        ],
+        Resource = "arn:aws:iam::*:role/${var.project_name}-*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:CreateBucket",
+          "s3:DeleteBucket",
+          "s3:PutBucketPolicy",
+          "s3:DeleteBucketPolicy",
+          "s3:GetBucketPolicy",
+          "s3:PutBucketEncryption",
+          "s3:GetEncryptionConfiguration",
+          "s3:PutBucketPublicAccessBlock",
+          "s3:GetBucketPublicAccessBlock",
+          "s3:PutBucketWebsite",
+          "s3:GetBucketWebsite"
+        ],
+        Resource = "arn:aws:s3:::${var.project_name}-*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "lambda:CreateFunction",
+          "lambda:DeleteFunction",
+          "lambda:GetFunction",
+          "lambda:UpdateFunctionCode",
+          "lambda:UpdateFunctionConfiguration",
+          "lambda:AddPermission",
+          "lambda:RemovePermission"
+        ],
+        Resource = "arn:aws:lambda:*:*:function:${var.project_name}-*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "apigateway:DELETE",
+          "apigateway:GET",
+          "apigateway:PATCH",
+          "apigateway:POST",
+          "apigateway:PUT"
+        ],
+        Resource = [
+          "arn:aws:apigateway:*::/restapis",
+          "arn:aws:apigateway:*::/restapis/*"
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "dynamodb:CreateTable",
+          "dynamodb:DeleteTable",
+          "dynamodb:DescribeTable",
+          "dynamodb:UpdateTable",
+          "dynamodb:TagResource"
+        ],
+        Resource = "arn:aws:dynamodb:*:*:table/${var.project_name}-*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "cloudfront:CreateDistribution",
+          "cloudfront:DeleteDistribution",
+          "cloudfront:GetDistribution",
+          "cloudfront:UpdateDistribution",
+          "cloudfront:CreateInvalidation",
+          "cloudfront:TagResource",
+          "cloudfront:CreateResponseHeadersPolicy",
+          "cloudfront:DeleteResponseHeadersPolicy",
+          "cloudfront:GetResponseHeadersPolicy"
         ],
         Resource = "*"
       }
@@ -195,7 +271,7 @@ resource "aws_iam_role_policy" "codebuild_web_policy" {
           "logs:CreateLogStream",
           "logs:PutLogEvents"
         ],
-        Resource = "*"
+        Resource = "arn:aws:logs:*:*:*"
       },
       {
         Effect = "Allow"
@@ -215,11 +291,25 @@ resource "aws_iam_role_policy" "codebuild_web_policy" {
       {
         Effect = "Allow"
         Action = [
-          "lambda:UpdateFunctionCode",
-          "cloudfront:CreateInvalidation",
-          "s3:*"
+          "lambda:UpdateFunctionCode"
         ],
-        Resource = "*"
+        Resource = "arn:aws:lambda:*:*:function:${var.project_name}-*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "cloudfront:CreateInvalidation"
+        ],
+        Resource = "arn:aws:cloudfront::*:distribution/*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:PutObject",
+          "s3:DeleteObject",
+          "s3:GetObject"
+        ],
+        Resource = "${aws_s3_bucket.website.arn}/*"
       }
     ]
   })
