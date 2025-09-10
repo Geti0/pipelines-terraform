@@ -151,7 +151,7 @@ resource "aws_cloudfront_distribution" "website_cdn" {
     viewer_protocol_policy = "redirect-to-https"
 
     # Associate the response headers policy
-    response_headers_policy_id = aws_cloudfront_response_headers_policy.security_headers.id
+    response_headers_policy_id = "67f7725c-6f97-4210-82d7-5512b31e9d03" # AWS Managed SecurityHeadersPolicy
   }
 
   restrictions {
@@ -163,36 +163,6 @@ resource "aws_cloudfront_distribution" "website_cdn" {
   viewer_certificate {
     cloudfront_default_certificate = true
     minimum_protocol_version       = "TLSv1.2_2021"
-  }
-}
-
-# CloudFront security headers policy
-resource "aws_cloudfront_response_headers_policy" "security_headers" {
-  name = "${var.project_name}-${var.deployment_id}-security-headers-${random_id.resource_suffix.hex}"
-
-  security_headers_config {
-    content_type_options {
-      override = true
-    }
-    frame_options {
-      frame_option = "DENY"
-      override     = true
-    }
-    referrer_policy {
-      referrer_policy = "same-origin"
-      override        = true
-    }
-    xss_protection {
-      mode_block = true
-      protection = true
-      override   = true
-    }
-    strict_transport_security {
-      access_control_max_age_sec = 31536000
-      include_subdomains         = true
-      preload                    = true
-      override                   = true
-    }
   }
 }
 
