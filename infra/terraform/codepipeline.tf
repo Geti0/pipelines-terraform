@@ -1,8 +1,5 @@
 # AWS CodePipeline for orchestrating infrastructure and web pipelines
 
-# Get current AWS account ID
-data "aws_caller_identity" "current" {}
-
 # Variables needed for CodePipeline
 variable "github_token" {
   description = "GitHub personal access token for repository access"
