@@ -1,8 +1,7 @@
 name: Web Pipeline
 
 # This pipeline builds and deploys the frontend and Lambda function
-# Note: Run the Terraform Pipeline first to create AWS infrastructure
-# Also: AWS CodePipeline provides an alternative deployment method
+# Note: This runs after the Terraform Pipeline completes infrastructure deployment
 
 on:
   push:
@@ -30,11 +29,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-      
-      - name: Set up Terraform
-        uses: hashicorp/setup-terraform@v2
-        with:
-          terraform_wrapper: false
       
       - name: Install frontend dependencies
         run: |
@@ -76,35 +70,75 @@ jobs:
           cd web/lambda
           npx jest --coverage
       
-      - name: Check if infrastructure exists
-        id: infra-check
+      - name: Wait for Infrastructure (if on main branch)
+        if: github.ref == 'refs/heads/main'
+        run: |
+          echo "Waiting for infrastructure to be ready..."
+          sleep 60  # Wait 1 minute for Terraform pipeline to complete
+      
+      - name: Set up Terraform
+        if: github.ref == 'refs/heads/main'
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_wrapper: false
+      
+      - name: Check Infrastructure and Deploy
+        if: github.ref == 'refs/heads/main'
         run: |
           cd infra/terraform
           terraform init
-          # Check if terraform state has resources and outputs exist
-          if terraform output s3_bucket_name > /dev/null 2>&1; then
-            echo "exists=true" >> $GITHUB_OUTPUT
-            echo "✅ Infrastructure exists, proceeding with deployment"
-          else
-            echo "exists=false" >> $GITHUB_OUTPUT
-            echo "⚠️  Infrastructure not deployed yet, skipping deployment steps"
-            echo "Run the terraform pipeline first to create AWS resources"
-          fi
-      
-      - name: Get Terraform outputs
-        id: terraform-outputs
-        if: steps.infra-check.outputs.exists == 'true'
-        run: |
-          cd infra/terraform
-          echo "s3_bucket=$(terraform output -raw s3_bucket_name)" >> $GITHUB_OUTPUT
-          echo "cloudfront_id=$(terraform output -raw cloudfront_distribution_id)" >> $GITHUB_OUTPUT
-      
-      - name: Deploy to S3
-        if: steps.infra-check.outputs.exists == 'true'
-        run: |
-          aws s3 sync web/frontend/dist s3://${{ steps.terraform-outputs.outputs.s3_bucket }} --delete
-      
-      - name: Invalidate CloudFront
-        if: steps.infra-check.outputs.exists == 'true'
-        run: |
-          aws cloudfront create-invalidation --distribution-id ${{ steps.terraform-outputs.outputs.cloudfront_id }} --paths "/*"
+          
+          # Retry logic for terraform output
+          max_retries=5
+          retry_count=0
+          
+          while [ $retry_count -lt $max_retries ]; do
+            echo "Attempt $((retry_count + 1)) to get infrastructure outputs..."
+            
+            if terraform output s3_bucket_name > /dev/null 2>&1; then
+              echo "✅ Infrastructure found, proceeding with deployment"
+              
+              # Get outputs
+              S3_BUCKET=$(terraform output -raw s3_bucket_name)
+              CLOUDFRONT_ID=$(terraform output -raw cloudfront_distribution_id)
+              LAMBDA_NAME=$(terraform output -raw lambda_function_name 2>/dev/null || echo "")
+              
+              echo "S3 Bucket: $S3_BUCKET"
+              echo "CloudFront ID: $CLOUDFRONT_ID"
+              echo "Lambda Function: $LAMBDA_NAME"
+              
+              # Deploy to S3
+              echo "Deploying frontend to S3..."
+              aws s3 sync ../../web/frontend/dist s3://$S3_BUCKET --delete
+              
+              # Update Lambda if function name is available
+              if [ -n "$LAMBDA_NAME" ]; then
+                echo "Creating Lambda deployment package..."
+                cd ../../web/lambda
+                zip -r ../lambda_function.zip . -x "coverage/*" "__tests__/*" "*.test.js" "jest.config.js" "eslint.config.js"
+                
+                echo "Updating Lambda function..."
+                aws lambda update-function-code --function-name $LAMBDA_NAME --zip-file fileb://../lambda_function.zip
+                cd ../..
+              else
+                echo "Lambda function name not available, skipping Lambda update"
+              fi
+              
+              # Invalidate CloudFront
+              echo "Invalidating CloudFront cache..."
+              aws cloudfront create-invalidation --distribution-id $CLOUDFRONT_ID --paths "/*"
+              
+              echo "✅ Web deployment completed successfully!"
+              exit 0
+            else
+              echo "⚠️  Infrastructure not ready yet, waiting..."
+              retry_count=$((retry_count + 1))
+              if [ $retry_count -lt $max_retries ]; then
+                sleep 30  # Wait 30 seconds before retry
+              fi
+            fi
+          done
+          
+          echo "❌ Infrastructure still not available after $max_retries attempts"
+          echo "Please ensure the Terraform pipeline completed successfully"
+          exit 1

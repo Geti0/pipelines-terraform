@@ -1,5 +1,7 @@
 # AWS CodePipeline for orchestrating infrastructure and web pipelines
+# COMMENTED OUT - Using GitHub Actions with sequential pipeline triggering instead
 
+/*
 # Get current AWS account ID for KMS policy
 data "aws_caller_identity" "current" {}
 
@@ -575,3 +577,7 @@ output "pipeline_url" {
   description = "URL to the pipeline in AWS Console"
   value       = "https://console.aws.amazon.com/codepipeline/home?region=${var.aws_region}#/view/${aws_codepipeline.pipeline.name}"
 }
+
+*/
+
+# CodePipeline configuration commented out - using GitHub Actions sequential approach instead
