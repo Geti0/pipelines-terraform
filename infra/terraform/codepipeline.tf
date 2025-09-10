@@ -59,11 +59,6 @@ resource "aws_kms_key" "pipeline_artifacts_key" {
       }
     ]
   })
-
-  tags = {
-    Name        = "${var.project_name}-pipeline-key"
-    Environment = var.environment
-  }
 }
 
 # KMS key alias for easy reference
