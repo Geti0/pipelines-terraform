@@ -50,12 +50,6 @@ variable "deployment_id" {
   default     = "deploy"
 }
 
-variable "existing_iam_user" {
-  description = "Name of existing IAM user to attach Parameter Store policy to"
-  type        = string
-  default     = "pipelines-terraform"
-}
-
 # S3 bucket for website hosting
 resource "aws_s3_bucket" "website" {
   bucket = "${var.project_name}-website-${random_id.bucket_suffix.hex}"
@@ -452,12 +446,6 @@ resource "aws_iam_policy" "pipeline_parameter_store_policy" {
     Environment = var.environment
     Purpose     = "CI/CD Parameter Store Access"
   }
-}
-
-# Automatically attach Parameter Store policy to existing IAM user
-resource "aws_iam_user_policy_attachment" "pipeline_parameter_store_attachment" {
-  user       = var.existing_iam_user
-  policy_arn = aws_iam_policy.pipeline_parameter_store_policy.arn
 }
 
 # Data source for current AWS account ID
