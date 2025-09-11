@@ -116,13 +116,52 @@ jobs:
         run: |
           echo "=== STORING INFRASTRUCTURE OUTPUTS ==="
           
-          # Get infrastructure outputs
-          S3_BUCKET=$(terraform output -raw s3_bucket_name)
-          CLOUDFRONT_ID=$(terraform output -raw cloudfront_distribution_id)
-          CLOUDFRONT_DOMAIN=$(terraform output -raw cloudfront_domain_name)
-          API_GATEWAY_URL=$(terraform output -raw api_gateway_url)
-          LAMBDA_FUNCTION_NAME=$(terraform output -raw lambda_function_name)
-          DYNAMODB_TABLE_NAME=$(terraform output -raw dynamodb_table_name)
+          # Get infrastructure outputs with error handling
+          echo "Extracting Terraform outputs..."
+          
+          if ! S3_BUCKET=$(terraform output -raw s3_bucket_name 2>/dev/null); then
+            echo "❌ Failed to get S3 bucket name"
+            terraform output
+            exit 1
+          fi
+          
+          if ! CLOUDFRONT_ID=$(terraform output -raw cloudfront_distribution_id 2>/dev/null); then
+            echo "❌ Failed to get CloudFront distribution ID"
+            terraform output
+            exit 1
+          fi
+          
+          if ! CLOUDFRONT_DOMAIN=$(terraform output -raw cloudfront_domain_name 2>/dev/null); then
+            echo "❌ Failed to get CloudFront domain name"
+            terraform output
+            exit 1
+          fi
+          
+          if ! API_GATEWAY_URL=$(terraform output -raw api_gateway_url 2>/dev/null); then
+            echo "❌ Failed to get API Gateway URL"
+            terraform output
+            exit 1
+          fi
+          
+          if ! LAMBDA_FUNCTION_NAME=$(terraform output -raw lambda_function_name 2>/dev/null); then
+            echo "❌ Failed to get Lambda function name"
+            terraform output
+            exit 1
+          fi
+          
+          if ! DYNAMODB_TABLE_NAME=$(terraform output -raw dynamodb_table_name 2>/dev/null); then
+            echo "❌ Failed to get DynamoDB table name"
+            terraform output
+            exit 1
+          fi
+          
+          echo "✅ Successfully extracted all outputs:"
+          echo "S3 Bucket: $S3_BUCKET"
+          echo "CloudFront Distribution: $CLOUDFRONT_ID"
+          echo "CloudFront Domain: $CLOUDFRONT_DOMAIN"
+          echo "API Gateway URL: $API_GATEWAY_URL"
+          echo "Lambda Function: $LAMBDA_FUNCTION_NAME"
+          echo "DynamoDB Table: $DYNAMODB_TABLE_NAME"
           
           echo "Storing outputs in Parameter Store..."
           
@@ -134,13 +173,5 @@ jobs:
           aws ssm put-parameter --name "/pipelines-terraform/lambda-function-name" --value "$LAMBDA_FUNCTION_NAME" --type "String" --overwrite
           aws ssm put-parameter --name "/pipelines-terraform/dynamodb-table-name" --value "$DYNAMODB_TABLE_NAME" --type "String" --overwrite
           
-          echo "✅ Infrastructure outputs stored in Parameter Store:"
-          echo "S3 Bucket: $S3_BUCKET"
-          echo "CloudFront Distribution: $CLOUDFRONT_ID"
-          echo "CloudFront Domain: $CLOUDFRONT_DOMAIN"
-          echo "API Gateway URL: $API_GATEWAY_URL"
-          echo "Lambda Function: $LAMBDA_FUNCTION_NAME"
-          echo "DynamoDB Table: $DYNAMODB_TABLE_NAME"
-          
-          # Trigger web pipeline
+          echo "✅ Infrastructure outputs stored in Parameter Store successfully!"
           echo "🚀 Infrastructure pipeline completed! Web pipeline can now be triggered."

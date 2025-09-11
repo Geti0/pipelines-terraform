@@ -31,15 +31,15 @@ phases:
       - echo "Running frontend quality checks..."
       - cd web/frontend
       - echo "Running ESLint on frontend..."
-      - npx eslint . --ext .js,.html --ignore-path .gitignore --ignore-pattern 'coverage/**' || echo "ESLint warnings found"
+      - npx eslint . --ext .js,.html || echo "ESLint warnings found"
       
       - echo "Running frontend tests with coverage..."
       - npm test -- --coverage --coverageReporters=text-summary
       
       - |
-        # Extract frontend coverage (simplified check)
-        if npm test -- --coverage --silent --coverageReporters=json 2>/dev/null; then
-          echo "Frontend tests completed"
+        # Simple coverage check without jq dependency
+        if [ -f coverage/coverage-summary.json ]; then
+          echo "✅ Frontend coverage report generated"
         else
           echo "⚠️ Frontend coverage may be below 70%"
         fi
@@ -48,15 +48,15 @@ phases:
       - echo "Running lambda quality checks..."
       - cd ../lambda
       - echo "Running ESLint on lambda..."
-      - npx eslint . --ext .js --ignore-path .gitignore --ignore-pattern 'coverage/**' || echo "ESLint warnings found"
+      - npx eslint . --ext .js || echo "ESLint warnings found"
       
       - echo "Running lambda tests with coverage..."
       - npm test -- --coverage --coverageReporters=text-summary
       
       - |
-        # Extract lambda coverage (simplified check for CodeBuild)
-        if npm test -- --coverage --silent --coverageReporters=json 2>/dev/null; then
-          echo "✅ Lambda tests completed with good coverage"
+        # Simple coverage check without jq dependency
+        if [ -f coverage/coverage-summary.json ]; then
+          echo "✅ Lambda coverage report generated"
         else
           echo "⚠️ Lambda coverage check needs attention"
         fi
