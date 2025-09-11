@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Contact Form Debug</title>
+</head>
+<body>
+    <h1>Contact Form Debug Test</h1>
+    <form id="contactForm">
+        <label for="name">Name:</label>
+        <input type="text" id="name" name="name" value="Test User" required><br><br>
+        <label for="email">Email:</label>
+        <input type="email" id="email" name="email" value="test@example.com" required><br><br>
+        <label for="message">Message:</label>
+        <textarea id="message" name="message" required>Test message</textarea><br><br>
+        <button type="submit">Send</button>
+    </form>
+    <div id="response"></div>
+    <div id="debug"></div>
+
+    <script>
+        const getApiUrl = () => {
+            return 'https://oy1go0ozja.execute-api.us-east-1.amazonaws.com/prod/contact';
+        };
+
+        document.getElementById('contactForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const name = document.getElementById('name').value.trim();
+            const email = document.getElementById('email').value.trim();
+            const message = document.getElementById('message').value.trim();
+            const responseDiv = document.getElementById('response');
+            const debugDiv = document.getElementById('debug');
+
+            debugDiv.innerHTML = '<h3>Debug Info:</h3>';
+            debugDiv.innerHTML += `<p>API URL: ${getApiUrl()}</p>`;
+            debugDiv.innerHTML += `<p>Payload: ${JSON.stringify({ name, email, message })}</p>`;
+
+            responseDiv.textContent = 'Sending...';
+            responseDiv.style.color = 'blue';
+
+            try {
+                debugDiv.innerHTML += '<p>Making fetch request...</p>';
+                
+                const res = await fetch(getApiUrl(), {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify({ name, email, message })
+                });
+                
+                debugDiv.innerHTML += `<p>Response status: ${res.status}</p>`;
+                debugDiv.innerHTML += `<p>Response headers: ${JSON.stringify(Object.fromEntries(res.headers))}</p>`;
+                
+                const data = await res.json();
+                debugDiv.innerHTML += `<p>Response data: ${JSON.stringify(data)}</p>`;
+                
+                if (res.ok && data.success) {
+                    responseDiv.textContent = 'Message sent successfully!';
+                    responseDiv.style.color = 'green';
+                } else {
+                    responseDiv.textContent = data.message || 'Error sending message.';
+                    responseDiv.style.color = 'red';
+                }
+            } catch (err) {
+                console.error('Error:', err);
+                debugDiv.innerHTML += `<p>Error caught: ${err.message}</p>`;
+                responseDiv.textContent = 'Network error occurred.';
+                responseDiv.style.color = 'red';
+            }
+        });
+    </script>
+</body>
+</html>
