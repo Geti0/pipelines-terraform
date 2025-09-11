@@ -14,18 +14,12 @@ on:
     paths:
       - 'web/**'
   workflow_dispatch:
-  workflow_run:
-    workflows: ["Infrastructure Pipeline"]
-    types:
-      - completed
-    branches: [ main, develop ]
 
 jobs:
   web-pipeline:
     runs-on: ubuntu-latest
-    # Only run if infrastructure pipeline was successful or if manually triggered/pushed
+    # Only run if manually triggered or pushed to web paths
     if: >
-      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') ||
       github.event_name == 'push' ||
       github.event_name == 'pull_request' ||
       github.event_name == 'workflow_dispatch'
