@@ -1,5 +1,5 @@
 # Main Terraform configuration for AWS CI/CD Assignment
-# Updated: Testing complete pipeline dependency chain flow
+# Updated: Project cleanup complete - Testing pipeline flow
 
 terraform {
   required_version = ">= 1.0"
