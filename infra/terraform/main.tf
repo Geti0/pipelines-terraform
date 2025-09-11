@@ -451,40 +451,6 @@ resource "aws_iam_policy" "pipeline_parameter_store_policy" {
 # Data source for current AWS account ID
 data "aws_caller_identity" "current" {}
 
-# IAM User for CI/CD Pipelines (if not exists)
-resource "aws_iam_user" "pipeline_user" {
-  name = "${var.project_name}-pipeline-user"
-  path = "/"
-
-  tags = {
-    Name        = "${var.project_name}-pipeline-user"
-    Environment = var.environment
-    Purpose     = "CI/CD Pipeline Operations"
-  }
-}
-
-# Attach Parameter Store policy to pipeline user
-resource "aws_iam_user_policy_attachment" "pipeline_user_parameter_store" {
-  user       = aws_iam_user.pipeline_user.name
-  policy_arn = aws_iam_policy.pipeline_parameter_store_policy.arn
-}
-
-# Additional policies for the pipeline user
-resource "aws_iam_user_policy_attachment" "pipeline_user_s3_full" {
-  user       = aws_iam_user.pipeline_user.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonS3FullAccess"
-}
-
-resource "aws_iam_user_policy_attachment" "pipeline_user_lambda_full" {
-  user       = aws_iam_user.pipeline_user.name
-  policy_arn = "arn:aws:iam::aws:policy/AWSLambda_FullAccess"
-}
-
-resource "aws_iam_user_policy_attachment" "pipeline_user_cloudfront_full" {
-  user       = aws_iam_user.pipeline_user.name
-  policy_arn = "arn:aws:iam::aws:policy/CloudFrontFullAccess"
-}
-
 # Outputs
 output "s3_bucket_name" {
   description = "Name of the S3 bucket"
@@ -516,7 +482,7 @@ output "lambda_function_name" {
   value       = aws_lambda_function.contact_form.function_name
 }
 
-output "pipeline_user_name" {
-  description = "IAM user for CI/CD pipelines"
-  value       = aws_iam_user.pipeline_user.name
+output "pipeline_parameter_store_policy_arn" {
+  description = "ARN of the Parameter Store policy for CI/CD pipelines"
+  value       = aws_iam_policy.pipeline_parameter_store_policy.arn
 }
