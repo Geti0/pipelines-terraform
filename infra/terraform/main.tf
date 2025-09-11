@@ -31,7 +31,7 @@ provider "aws" {
 variable "aws_region" {
   description = "AWS region"
   type        = string
-  default     = "eu-north-1"
+  default     = "us-east-1"
 }
 
 variable "project_name" {
@@ -324,6 +324,18 @@ resource "aws_api_gateway_method" "post_contact" {
   request_validator_id = aws_api_gateway_request_validator.contact_validator.id
 }
 
+# Add POST method response for CORS
+resource "aws_api_gateway_method_response" "post_contact" {
+  rest_api_id = aws_api_gateway_rest_api.contact_api.id
+  resource_id = aws_api_gateway_resource.contact.id
+  http_method = aws_api_gateway_method.post_contact.http_method
+  status_code = "200"
+
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Origin" = true
+  }
+}
+
 # Enable CORS
 resource "aws_api_gateway_method" "options_contact" {
   rest_api_id   = aws_api_gateway_rest_api.contact_api.id
@@ -365,7 +377,7 @@ resource "aws_api_gateway_integration_response" "options_contact" {
   response_parameters = {
     "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
     "method.response.header.Access-Control-Allow-Methods" = "'POST,OPTIONS'"
-    "method.response.header.Access-Control-Allow-Origin"  = "'https://${aws_cloudfront_distribution.website_cdn.domain_name}'"
+    "method.response.header.Access-Control-Allow-Origin"  = "'*'"
   }
 }
 
