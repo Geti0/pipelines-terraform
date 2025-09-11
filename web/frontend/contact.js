@@ -23,7 +23,7 @@ document.getElementById('contactForm').addEventListener('submit', async function
   responseDiv.style.color = 'blue';
 
   try {
-    const res = await fetch('API_GATEWAY_URL_PLACEHOLDER', {
+    const res = await fetch(import.meta.env.VITE_API_GATEWAY_URL || 'API_GATEWAY_URL_PLACEHOLDER', {
       method: 'POST',
       headers: { 
         'Content-Type': 'application/json',
