@@ -1,18 +1,13 @@
-// Mock AWS SDK v3
-const mockSend = jest.fn();
+// Mock AWS SDK
+const mockPut = jest.fn();
 
-// Mock AWS SDK v3 before requiring the handler
-jest.mock('@aws-sdk/client-dynamodb', () => ({
-  DynamoDBClient: jest.fn()
-}));
-
-jest.mock('@aws-sdk/lib-dynamodb', () => ({
-  DynamoDBDocumentClient: {
-    from: jest.fn(() => ({
-      send: mockSend
+// Mock AWS SDK before requiring the handler
+jest.mock('aws-sdk', () => ({
+  DynamoDB: {
+    DocumentClient: jest.fn(() => ({
+      put: mockPut
     }))
-  },
-  PutCommand: jest.fn((params) => params)
+  }
 }));
 
 // Mock uuid
@@ -27,8 +22,10 @@ describe('Contact Form Lambda Handler', () => {
     jest.clearAllMocks();
     process.env.DYNAMODB_TABLE = 'test-contact-table';
     
-    // Mock successful DynamoDB send
-    mockSend.mockResolvedValue({});
+    // Mock successful DynamoDB put
+    mockPut.mockReturnValue({
+      promise: jest.fn().mockResolvedValue({})
+    });
   });
 
   afterEach(() => {
@@ -60,7 +57,7 @@ describe('Contact Form Lambda Handler', () => {
     const response = await handler(event);
 
     expect(response.statusCode).toBe(200);
-    expect(mockSend).toHaveBeenCalledWith({
+    expect(mockPut).toHaveBeenCalledWith({
       TableName: 'test-contact-table',
       Item: {
         id: 'test-uuid-123',
@@ -139,7 +136,9 @@ describe('Contact Form Lambda Handler', () => {
   });
 
   test('should handle DynamoDB errors', async () => {
-    mockSend.mockRejectedValue(new Error('DynamoDB error'));
+    mockPut.mockReturnValue({
+      promise: jest.fn().mockRejectedValue(new Error('DynamoDB error'))
+    });
 
     const event = {
       httpMethod: 'POST',
@@ -160,7 +159,9 @@ describe('Contact Form Lambda Handler', () => {
 
   test('should trim whitespace from input fields', async () => {
     // Reset mock for this test
-    mockSend.mockResolvedValue({});
+    mockPut.mockReturnValue({
+      promise: jest.fn().mockResolvedValue({})
+    });
 
     const event = {
       httpMethod: 'POST',
@@ -179,7 +180,7 @@ describe('Contact Form Lambda Handler', () => {
     }
 
     expect(response.statusCode).toBe(200);
-    expect(mockSend).toHaveBeenCalledWith({
+    expect(mockPut).toHaveBeenCalledWith({
       TableName: 'test-contact-table',
       Item: {
         id: 'test-uuid-123',

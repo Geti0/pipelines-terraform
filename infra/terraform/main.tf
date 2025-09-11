@@ -1,6 +1,5 @@
 # Main Terraform configuration for AWS CI/CD Assignment
 # Updated: Project cleanup complete - Testing pipeline flow
-# Trigger infrastructure pipeline - Sep 11 2025
 
 terraform {
   required_version = ">= 1.0"
@@ -31,7 +30,7 @@ provider "aws" {
 variable "aws_region" {
   description = "AWS region"
   type        = string
-  default     = "us-east-1"
+  default     = "eu-north-1"
 }
 
 variable "project_name" {
