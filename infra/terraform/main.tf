@@ -1,6 +1,6 @@
 # Main Terraform configuration for AWS CI/CD Assignment
 # Updated: Project cleanup complete - Testing pipeline flow
-# Trigger infrastructure pipeline - Sep 11 2025
+# Trigger infrastructure pipeline - Sep-11-2025
 
 terraform {
   required_version = ">= 1.0"

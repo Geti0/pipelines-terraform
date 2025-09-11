@@ -14,12 +14,18 @@ on:
     paths:
       - 'web/**'
   workflow_dispatch:
+  workflow_run:
+    workflows: ["Infrastructure Pipeline"]
+    types:
+      - completed
+    branches: [ main, develop ]
 
 jobs:
   web-pipeline:
     runs-on: ubuntu-latest
-    # Only run if manually triggered or pushed to web paths
+    # Only run if infrastructure pipeline was successful or if manually triggered/pushed
     if: >
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') ||
       github.event_name == 'push' ||
       github.event_name == 'pull_request' ||
       github.event_name == 'workflow_dispatch'
@@ -35,7 +41,7 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: eu-north-1
+          aws-region: us-east-1
       
       - name: Set up Node.js
         uses: actions/setup-node@v3
@@ -104,66 +110,18 @@ jobs:
       # ==============================================
       # BUILD PHASE - Web Application Build
       # ==============================================
-      - name: Pre-Deployment Lambda Status Check
-        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
-        run: |
-          echo "=== CHECKING LAMBDA FUNCTION STATUS ==="
-          
-          # Get Lambda function name from Parameter Store first
-          LAMBDA_FUNCTION_NAME=$(aws ssm get-parameter --name "/pipelines-terraform/lambda-function-name" --query 'Parameter.Value' --output text)
-          
-          # Function to wait for any ongoing Lambda updates to complete
-          wait_for_lambda_stable() {
-            local func_name=$1
-            local max_attempts=20
-            local attempt=1
-            
-            echo "Checking if Lambda function has any ongoing updates..."
-            while [ $attempt -le $max_attempts ]; do
-              status=$(aws lambda get-function --function-name "$func_name" --query 'Configuration.State' --output text 2>/dev/null || echo "Unknown")
-              last_update=$(aws lambda get-function --function-name "$func_name" --query 'Configuration.LastUpdateStatus' --output text 2>/dev/null || echo "Unknown")
-              
-              echo "Lambda State: $status, Last Update Status: $last_update (check $attempt/$max_attempts)"
-              
-              if [ "$status" = "Active" ] && [ "$last_update" = "Successful" ]; then
-                echo "✅ Lambda function is stable and ready for updates"
-                return 0
-              elif [ "$status" = "Failed" ] || [ "$last_update" = "Failed" ]; then
-                echo "❌ Lambda function is in failed state"
-                aws lambda get-function --function-name "$func_name" --query 'Configuration' || true
-                return 1
-              elif [ "$status" = "Pending" ] || [ "$last_update" = "InProgress" ]; then
-                echo "⏳ Lambda function has ongoing updates, waiting..."
-                sleep 15
-                attempt=$((attempt + 1))
-              else
-                echo "⚠️ Unknown Lambda state, waiting..."
-                sleep 15
-                attempt=$((attempt + 1))
-              fi
-            done
-            
-            echo "❌ Timeout waiting for Lambda function to stabilize"
-            return 1
-          }
-          
-          # Wait for Lambda to be stable before proceeding
-          wait_for_lambda_stable "$LAMBDA_FUNCTION_NAME"
-          
-          echo "✅ Lambda function is ready for deployment operations"
-          
       - name: Retrieve Infrastructure Data from Parameter Store
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
         run: |
           echo "=== RETRIEVING INFRASTRUCTURE DATA ==="
           
           # Retrieve all infrastructure details from Parameter Store
-          S3_BUCKET=$(aws ssm get-parameter --name "/pipelines-terraform/s3-bucket-name" --query 'Parameter.Value' --output text)
-          CLOUDFRONT_ID=$(aws ssm get-parameter --name "/pipelines-terraform/cloudfront-distribution-id" --query 'Parameter.Value' --output text)
-          CLOUDFRONT_DOMAIN=$(aws ssm get-parameter --name "/pipelines-terraform/cloudfront-domain-name" --query 'Parameter.Value' --output text)
-          API_GATEWAY_URL=$(aws ssm get-parameter --name "/pipelines-terraform/api-gateway-url" --query 'Parameter.Value' --output text)
-          LAMBDA_FUNCTION_NAME=$(aws ssm get-parameter --name "/pipelines-terraform/lambda-function-name" --query 'Parameter.Value' --output text)
-          DYNAMODB_TABLE_NAME=$(aws ssm get-parameter --name "/pipelines-terraform/dynamodb-table-name" --query 'Parameter.Value' --output text)
+          S3_BUCKET=$(aws ssm get-parameter --name "/pipelines-terraform/s3-bucket-name" --query 'Parameter.Value' --output text 2>/dev/null || echo "")
+          CLOUDFRONT_ID=$(aws ssm get-parameter --name "/pipelines-terraform/cloudfront-distribution-id" --query 'Parameter.Value' --output text 2>/dev/null || echo "")
+          CLOUDFRONT_DOMAIN=$(aws ssm get-parameter --name "/pipelines-terraform/cloudfront-domain-name" --query 'Parameter.Value' --output text 2>/dev/null || echo "")
+          API_GATEWAY_URL=$(aws ssm get-parameter --name "/pipelines-terraform/api-gateway-url" --query 'Parameter.Value' --output text 2>/dev/null || echo "")
+          LAMBDA_FUNCTION_NAME=$(aws ssm get-parameter --name "/pipelines-terraform/lambda-function-name" --query 'Parameter.Value' --output text 2>/dev/null || echo "")
+          DYNAMODB_TABLE_NAME=$(aws ssm get-parameter --name "/pipelines-terraform/dynamodb-table-name" --query 'Parameter.Value' --output text 2>/dev/null || echo "")
           
           # Store in GitHub environment for subsequent steps
           echo "S3_BUCKET=$S3_BUCKET" >> $GITHUB_ENV
