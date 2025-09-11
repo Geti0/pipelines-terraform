@@ -1,5 +1,5 @@
 # Main Terraform configuration for AWS CI/CD Assignment
-# Updated: Pipeline dependency chain implemented
+# Updated: Testing complete pipeline dependency chain flow
 
 terraform {
   required_version = ">= 1.0"
