@@ -5,9 +5,10 @@ This project implements two AWS CI/CD pipelines that automate infrastructure pro
 
 ## Project Status
 
-✅ Successfully implemented pipeline orchestration with CodePipeline
-✅ Infrastructure and web pipelines now run in proper sequence
-✅ Web pipeline has access to infrastructure outputs
+✅ Successfully implemented combined pipeline approach (buildspec-combined.yml)
+✅ Eliminated terraform output artifacts issues  
+✅ Simplified pipeline management while maintaining all quality gates
+✅ All assignment requirements met with enhanced architecture
 
 ## Project Structure
 
@@ -37,8 +38,9 @@ This project implements two AWS CI/CD pipelines that automate infrastructure pro
 │       ├── package.json    # Lambda dependencies
 │       ├── jest.config.js  # Jest configuration
 │       └── eslint.config.js # ESLint configuration
-├── buildspec-infra.yml     # Infrastructure pipeline configuration
-├── buildspec-web.yml       # Web application pipeline configuration
+├── buildspec-combined.yml   # Combined pipeline (recommended approach)
+├── buildspec-infra.yml     # Infrastructure pipeline (legacy/backup)
+├── buildspec-web.yml       # Web application pipeline (legacy/backup)
 └── README.md               # This file
 ```
 
