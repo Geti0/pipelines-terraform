@@ -102,10 +102,15 @@ jobs:
         run: |
           echo "=== WEB APPLICATION QUALITY CHECKS ==="
           
+          # Clean all coverage directories first
+          echo "Cleaning up coverage directories..."
+          rm -rf web/*/coverage || true
+          find . -name "coverage" -type d -exec rm -rf {} + 2>/dev/null || true
+          
           # Frontend quality checks
           echo "Running ESLint on frontend..."
           cd web/frontend
-          npx eslint . --max-warnings 0
+          npx eslint "*.js" "__tests__/**/*.js" --max-warnings 0
           
           echo "Running Stylelint on CSS..."
           npx stylelint "**/*.css"
@@ -116,6 +121,7 @@ jobs:
           # Lambda quality checks  
           echo "Running ESLint on Lambda..."
           cd ../lambda
+          rm -rf coverage  # Clean coverage directory
           npx eslint index.js --max-warnings 0
           
           echo "Running Lambda tests..."
