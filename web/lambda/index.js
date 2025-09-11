@@ -2,6 +2,11 @@
 const AWS = require('aws-sdk');
 const { v4: uuidv4 } = require('uuid');
 
+// Configure AWS SDK with region
+AWS.config.update({
+    region: process.env.AWS_REGION || 'us-east-1'
+});
+
 const dynamodb = new AWS.DynamoDB.DocumentClient();
 
 exports.handler = async (event) => {

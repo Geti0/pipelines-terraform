@@ -3,6 +3,9 @@ const mockPut = jest.fn();
 
 // Mock AWS SDK before requiring the handler
 jest.mock('aws-sdk', () => ({
+  config: {
+    update: jest.fn()
+  },
   DynamoDB: {
     DocumentClient: jest.fn(() => ({
       put: mockPut
