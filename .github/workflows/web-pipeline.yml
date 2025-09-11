@@ -110,6 +110,54 @@ jobs:
       # ==============================================
       # BUILD PHASE - Web Application Build
       # ==============================================
+      - name: Pre-Deployment Lambda Status Check
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
+        run: |
+          echo "=== CHECKING LAMBDA FUNCTION STATUS ==="
+          
+          # Get Lambda function name from Parameter Store first
+          LAMBDA_FUNCTION_NAME=$(aws ssm get-parameter --name "/pipelines-terraform/lambda-function-name" --query 'Parameter.Value' --output text)
+          
+          # Function to wait for any ongoing Lambda updates to complete
+          wait_for_lambda_stable() {
+            local func_name=$1
+            local max_attempts=20
+            local attempt=1
+            
+            echo "Checking if Lambda function has any ongoing updates..."
+            while [ $attempt -le $max_attempts ]; do
+              status=$(aws lambda get-function --function-name "$func_name" --query 'Configuration.State' --output text 2>/dev/null || echo "Unknown")
+              last_update=$(aws lambda get-function --function-name "$func_name" --query 'Configuration.LastUpdateStatus' --output text 2>/dev/null || echo "Unknown")
+              
+              echo "Lambda State: $status, Last Update Status: $last_update (check $attempt/$max_attempts)"
+              
+              if [ "$status" = "Active" ] && [ "$last_update" = "Successful" ]; then
+                echo "✅ Lambda function is stable and ready for updates"
+                return 0
+              elif [ "$status" = "Failed" ] || [ "$last_update" = "Failed" ]; then
+                echo "❌ Lambda function is in failed state"
+                aws lambda get-function --function-name "$func_name" --query 'Configuration' || true
+                return 1
+              elif [ "$status" = "Pending" ] || [ "$last_update" = "InProgress" ]; then
+                echo "⏳ Lambda function has ongoing updates, waiting..."
+                sleep 15
+                attempt=$((attempt + 1))
+              else
+                echo "⚠️ Unknown Lambda state, waiting..."
+                sleep 15
+                attempt=$((attempt + 1))
+              fi
+            done
+            
+            echo "❌ Timeout waiting for Lambda function to stabilize"
+            return 1
+          }
+          
+          # Wait for Lambda to be stable before proceeding
+          wait_for_lambda_stable "$LAMBDA_FUNCTION_NAME"
+          
+          echo "✅ Lambda function is ready for deployment operations"
+          
       - name: Retrieve Infrastructure Data from Parameter Store
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
         run: |
@@ -165,15 +213,78 @@ jobs:
           # Create deployment package
           zip -r lambda-deployment.zip . -x "*.test.js" "jest.config.js" "eslint.config.js" "coverage/*" "node_modules/jest*" "node_modules/@jest*"
           
-          # Update Lambda function code
-          aws lambda update-function-code \
-            --function-name $LAMBDA_FUNCTION_NAME \
-            --zip-file fileb://lambda-deployment.zip
+          # Function to wait for Lambda to be ready
+          wait_for_lambda_ready() {
+            local func_name=$1
+            local max_attempts=30
+            local attempt=1
+            
+            echo "Waiting for Lambda function to be ready..."
+            while [ $attempt -le $max_attempts ]; do
+              status=$(aws lambda get-function --function-name "$func_name" --query 'Configuration.State' --output text 2>/dev/null || echo "Failed")
+              if [ "$status" = "Active" ]; then
+                echo "✅ Lambda function is ready (attempt $attempt)"
+                return 0
+              elif [ "$status" = "Failed" ]; then
+                echo "❌ Lambda function is in Failed state"
+                return 1
+              else
+                echo "⏳ Lambda function state: $status (attempt $attempt/$max_attempts)"
+                sleep 10
+                attempt=$((attempt + 1))
+              fi
+            done
+            echo "❌ Timeout waiting for Lambda function to be ready"
+            return 1
+          }
           
-          # Update environment variables
-          aws lambda update-function-configuration \
-            --function-name $LAMBDA_FUNCTION_NAME \
-            --environment Variables="{DYNAMODB_TABLE_NAME=$DYNAMODB_TABLE_NAME}"
+          # Function to update Lambda with retries
+          update_lambda_with_retry() {
+            local operation=$1
+            local max_attempts=5
+            local attempt=1
+            
+            while [ $attempt -le $max_attempts ]; do
+              echo "Attempting $operation (attempt $attempt/$max_attempts)..."
+              
+              if [ "$operation" = "code" ]; then
+                if aws lambda update-function-code \
+                  --function-name $LAMBDA_FUNCTION_NAME \
+                  --zip-file fileb://lambda-deployment.zip; then
+                  echo "✅ Lambda code updated successfully"
+                  return 0
+                fi
+              elif [ "$operation" = "config" ]; then
+                if aws lambda update-function-configuration \
+                  --function-name $LAMBDA_FUNCTION_NAME \
+                  --environment Variables="{DYNAMODB_TABLE_NAME=$DYNAMODB_TABLE_NAME}"; then
+                  echo "✅ Lambda configuration updated successfully"
+                  return 0
+                fi
+              fi
+              
+              if [ $attempt -lt $max_attempts ]; then
+                echo "⚠️ Update failed, waiting 30 seconds before retry..."
+                sleep 30
+              fi
+              attempt=$((attempt + 1))
+            done
+            
+            echo "❌ Failed to update Lambda $operation after $max_attempts attempts"
+            return 1
+          }
+          
+          # Wait for Lambda to be ready before any updates
+          wait_for_lambda_ready $LAMBDA_FUNCTION_NAME
+          
+          # Update Lambda function code with retries
+          update_lambda_with_retry "code"
+          
+          # Wait for code update to complete before config update
+          wait_for_lambda_ready $LAMBDA_FUNCTION_NAME
+          
+          # Update environment variables with retries
+          update_lambda_with_retry "config"
           
           echo "✅ Lambda function deployed successfully!"
       
