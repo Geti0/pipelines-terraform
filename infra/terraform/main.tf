@@ -410,6 +410,81 @@ resource "aws_api_gateway_stage" "prod" {
   xray_tracing_enabled = true
 }
 
+# IAM Policy for CI/CD Pipeline Access to Parameter Store
+resource "aws_iam_policy" "pipeline_parameter_store_policy" {
+  name        = "${var.project_name}-${var.deployment_id}-pipeline-parameter-store-policy-${random_id.resource_suffix.hex}"
+  description = "Policy to allow CI/CD pipeline to read/write Parameter Store values"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "ssm:GetParameter",
+          "ssm:GetParameters",
+          "ssm:PutParameter",
+          "ssm:DeleteParameter",
+          "ssm:GetParameterHistory"
+        ]
+        Resource = [
+          "arn:aws:ssm:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:parameter/pipelines-terraform/*"
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "ssm:DescribeParameters"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+
+  tags = {
+    Name        = "${var.project_name}-pipeline-parameter-store-policy"
+    Environment = var.environment
+    Purpose     = "CI/CD Parameter Store Access"
+  }
+}
+
+# Data source for current AWS account ID
+data "aws_caller_identity" "current" {}
+
+# IAM User for CI/CD Pipelines (if not exists)
+resource "aws_iam_user" "pipeline_user" {
+  name = "${var.project_name}-pipeline-user"
+  path = "/"
+
+  tags = {
+    Name        = "${var.project_name}-pipeline-user"
+    Environment = var.environment
+    Purpose     = "CI/CD Pipeline Operations"
+  }
+}
+
+# Attach Parameter Store policy to pipeline user
+resource "aws_iam_user_policy_attachment" "pipeline_user_parameter_store" {
+  user       = aws_iam_user.pipeline_user.name
+  policy_arn = aws_iam_policy.pipeline_parameter_store_policy.arn
+}
+
+# Additional policies for the pipeline user
+resource "aws_iam_user_policy_attachment" "pipeline_user_s3_full" {
+  user       = aws_iam_user.pipeline_user.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonS3FullAccess"
+}
+
+resource "aws_iam_user_policy_attachment" "pipeline_user_lambda_full" {
+  user       = aws_iam_user.pipeline_user.name
+  policy_arn = "arn:aws:iam::aws:policy/AWSLambda_FullAccess"
+}
+
+resource "aws_iam_user_policy_attachment" "pipeline_user_cloudfront_full" {
+  user       = aws_iam_user.pipeline_user.name
+  policy_arn = "arn:aws:iam::aws:policy/CloudFrontFullAccess"
+}
+
 # Outputs
 output "s3_bucket_name" {
   description = "Name of the S3 bucket"
@@ -439,4 +514,9 @@ output "dynamodb_table_name" {
 output "lambda_function_name" {
   description = "Lambda function name"
   value       = aws_lambda_function.contact_form.function_name
+}
+
+output "pipeline_user_name" {
+  description = "IAM user for CI/CD pipelines"
+  value       = aws_iam_user.pipeline_user.name
 }
