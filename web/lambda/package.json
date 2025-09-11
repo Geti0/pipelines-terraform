@@ -10,7 +10,8 @@
     "lint:fix": "eslint index.js --fix"
   },
   "dependencies": {
-    "aws-sdk": "^2.1490.0",
+    "@aws-sdk/client-dynamodb": "^3.600.0",
+    "@aws-sdk/lib-dynamodb": "^3.600.0",
     "uuid": "^9.0.1"
   },
   "devDependencies": {

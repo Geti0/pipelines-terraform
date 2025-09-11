@@ -1,8 +1,11 @@
 // Lambda function for contact form processing
-const AWS = require('aws-sdk');
+const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
+const { DynamoDBDocumentClient, PutCommand } = require('@aws-sdk/lib-dynamodb');
 const { v4: uuidv4 } = require('uuid');
 
-const dynamodb = new AWS.DynamoDB.DocumentClient();
+// Initialize DynamoDB client
+const client = new DynamoDBClient({});
+const dynamodb = DynamoDBDocumentClient.from(client);
 
 exports.handler = async (event) => {
     // Set CORS headers
@@ -89,10 +92,10 @@ exports.handler = async (event) => {
         };
 
         // Store in DynamoDB
-        await dynamodb.put({
+        await dynamodb.send(new PutCommand({
             TableName: process.env.DYNAMODB_TABLE,
             Item: item
-        }).promise();
+        }));
 
         return {
             statusCode: 200,
