@@ -1,3 +1,12 @@
+// Use a fallback for import.meta in test environments
+const getApiUrl = () => {
+  try {
+    return import.meta.env.VITE_API_GATEWAY_URL || 'API_GATEWAY_URL_PLACEHOLDER';
+  } catch (e) {
+    return 'API_GATEWAY_URL_PLACEHOLDER';
+  }
+};
+
 document.getElementById('contactForm').addEventListener('submit', async function(e) {
   e.preventDefault();
   const name = document.getElementById('name').value.trim();
@@ -23,7 +32,7 @@ document.getElementById('contactForm').addEventListener('submit', async function
   responseDiv.style.color = 'blue';
 
   try {
-    const res = await fetch(import.meta.env.VITE_API_GATEWAY_URL || 'API_GATEWAY_URL_PLACEHOLDER', {
+    const res = await fetch(getApiUrl(), {
       method: 'POST',
       headers: { 
         'Content-Type': 'application/json',

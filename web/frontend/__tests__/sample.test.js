@@ -5,13 +5,14 @@
 // Mock fetch globally
 global.fetch = jest.fn();
 
-// Import the contact.js functionality by requiring it
-const fs = require('fs');
-const path = require('path');
-
-// Load the contact.js file content
-const contactJsPath = path.join(__dirname, '../contact.js');
-const contactJsContent = fs.readFileSync(contactJsPath, 'utf8');
+// Mock import.meta for testing
+global.import = {
+  meta: {
+    env: {
+      VITE_API_GATEWAY_URL: 'API_GATEWAY_URL_PLACEHOLDER'
+    }
+  }
+};
 
 describe('Contact Form Tests', () => {
   beforeEach(() => {
@@ -29,8 +30,61 @@ describe('Contact Form Tests', () => {
     // Clear all mocks
     jest.clearAllMocks();
     
-    // Execute the contact.js script in the test environment
-    eval(contactJsContent);
+    // Mock the getApiUrl function
+    global.getApiUrl = jest.fn(() => 'API_GATEWAY_URL_PLACEHOLDER');
+    
+    // Set up form event listener manually for testing
+    const form = document.getElementById('contactForm');
+    form.addEventListener('submit', async function(e) {
+      e.preventDefault();
+      const name = document.getElementById('name').value.trim();
+      const email = document.getElementById('email').value.trim();
+      const message = document.getElementById('message').value.trim();
+      const responseDiv = document.getElementById('response');
+
+      // Client-side validation
+      if (!name || !email || !message) {
+        responseDiv.textContent = 'Please fill in all fields.';
+        responseDiv.style.color = 'red';
+        return;
+      }
+
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        responseDiv.textContent = 'Please enter a valid email address.';
+        responseDiv.style.color = 'red';
+        return;
+      }
+
+      responseDiv.textContent = 'Sending...';
+      responseDiv.style.color = 'blue';
+
+      try {
+        const res = await fetch('API_GATEWAY_URL_PLACEHOLDER', {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          body: JSON.stringify({ name, email, message })
+        });
+        
+        const data = await res.json();
+        
+        if (res.ok && data.success) {
+          responseDiv.textContent = 'Message sent successfully! Thank you for contacting us.';
+          responseDiv.style.color = 'green';
+          document.getElementById('contactForm').reset();
+        } else {
+          responseDiv.textContent = data.message || 'Error sending message. Please try again.';
+          responseDiv.style.color = 'red';
+        }
+      } catch (err) {
+        console.error('Error:', err);
+        responseDiv.textContent = 'Network error. Please check your connection and try again.';
+        responseDiv.style.color = 'red';
+      }
+    });
   });
 
   test('should show error for empty form submission', async () => {

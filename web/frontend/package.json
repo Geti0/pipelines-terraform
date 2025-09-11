@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview", 
-    "test": "jest",
+    "test": "jest --coverage --coverageReporters=text-summary",
     "test:coverage": "jest --coverage",
     "lint": "eslint . --ext .js --report-unused-disable-directives --max-warnings 0",
     "lint:css": "stylelint '**/*.css'"
@@ -24,6 +24,30 @@
     "jest-environment-jsdom": "^30.1.2",
     "stylelint": "^16.24.0",
     "stylelint-config-standard": "^36.0.1",
-    "vite": "^7.1.5"
+    "vite": "^7.1.5",
+    "@babel/preset-env": "^7.22.0",
+    "babel-jest": "^29.6.0"
+  },
+  "jest": {
+    "testEnvironment": "jsdom",
+    "transform": {
+      "^.+\\.js$": "babel-jest"
+    },
+    "moduleFileExtensions": ["js"],
+    "collectCoverageFrom": [
+      "*.js",
+      "!vite.config.js",
+      "!jest.config.js",
+      "!eslint.config.js"
+    ]
+  },
+  "babel": {
+    "presets": [
+      ["@babel/preset-env", {
+        "targets": {
+          "node": "current"
+        }
+      }]
+    ]
   }
 }
