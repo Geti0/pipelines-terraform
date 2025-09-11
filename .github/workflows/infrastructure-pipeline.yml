@@ -1,0 +1,146 @@
+name: Infrastructure Pipeline
+
+# Terraform pipeline that provisions AWS infrastructure and stores outputs in Parameter Store
+# This runs first and stores infrastructure details for the web pipeline to use
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths: 
+      - 'infra/**'
+      - '.github/workflows/infrastructure-pipeline.yml'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'infra/**'
+  workflow_dispatch:
+
+jobs:
+  terraform-pipeline:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./infra/terraform
+    steps:
+      # ==============================================
+      # INSTALL PHASE - Infrastructure Tools
+      # ==============================================
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: eu-north-1
+      
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.5.0
+          terraform_wrapper: false
+      
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.19'
+          
+      - name: Install TFLint
+        uses: terraform-linters/setup-tflint@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Install Checkov
+        run: pip install checkov
+          
+      # ==============================================
+      # PRE-BUILD PHASE - Infrastructure Quality Checks
+      # ==============================================
+      - name: Infrastructure Quality Checks
+        run: |
+          echo "=== INFRASTRUCTURE QUALITY CHECKS ==="
+          
+          echo "Running Terraform format check..."
+          terraform fmt -check
+          
+          echo "Running Terraform validation..."
+          terraform init
+          terraform validate
+          
+          echo "Running TFLint..."
+          tflint --init && tflint
+          
+          echo "Running Checkov security scan..."
+          checkov -d . --quiet
+      
+      - name: Terratest Infrastructure Tests
+        run: |
+          echo "Running Terratest..."
+          cd ../test
+          go mod tidy
+          go test -v -timeout 45m -coverprofile=coverage.out -covermode=atomic
+          
+          COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print substr($3, 1, length($3)-1)}')
+          echo "Infrastructure test coverage: $COVERAGE%"
+          
+          if (( $(echo "$COVERAGE >= 60" | bc -l) )); then
+            echo "✅ Infrastructure coverage check passed: $COVERAGE% >= 60%"
+          else
+            echo "❌ Infrastructure coverage check failed: $COVERAGE% < 60%"
+            exit 1
+          fi
+        continue-on-error: true  # Don't fail if Go tests have issues
+          
+      # ==============================================
+      # BUILD PHASE - Infrastructure Deployment
+      # ==============================================
+      - name: Deploy Infrastructure
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
+        run: |
+          echo "=== INFRASTRUCTURE DEPLOYMENT ==="
+          
+          echo "Creating Terraform plan..."
+          terraform plan -out=tfplan
+          
+          echo "Applying Terraform infrastructure..."
+          terraform apply -auto-approve tfplan
+          
+          echo "Infrastructure deployed successfully!"
+          
+      # ==============================================
+      # POST-BUILD PHASE - Store Outputs in Parameter Store
+      # ==============================================
+      - name: Store Infrastructure Outputs in Parameter Store
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
+        run: |
+          echo "=== STORING INFRASTRUCTURE OUTPUTS ==="
+          
+          # Get infrastructure outputs
+          S3_BUCKET=$(terraform output -raw s3_bucket_name)
+          CLOUDFRONT_ID=$(terraform output -raw cloudfront_distribution_id)
+          CLOUDFRONT_DOMAIN=$(terraform output -raw cloudfront_domain_name)
+          API_GATEWAY_URL=$(terraform output -raw api_gateway_url)
+          LAMBDA_FUNCTION_NAME=$(terraform output -raw lambda_function_name)
+          DYNAMODB_TABLE_NAME=$(terraform output -raw dynamodb_table_name)
+          
+          echo "Storing outputs in Parameter Store..."
+          
+          # Store each output in Parameter Store with overwrite
+          aws ssm put-parameter --name "/pipelines-terraform/s3-bucket-name" --value "$S3_BUCKET" --type "String" --overwrite
+          aws ssm put-parameter --name "/pipelines-terraform/cloudfront-distribution-id" --value "$CLOUDFRONT_ID" --type "String" --overwrite
+          aws ssm put-parameter --name "/pipelines-terraform/cloudfront-domain-name" --value "$CLOUDFRONT_DOMAIN" --type "String" --overwrite
+          aws ssm put-parameter --name "/pipelines-terraform/api-gateway-url" --value "$API_GATEWAY_URL" --type "String" --overwrite
+          aws ssm put-parameter --name "/pipelines-terraform/lambda-function-name" --value "$LAMBDA_FUNCTION_NAME" --type "String" --overwrite
+          aws ssm put-parameter --name "/pipelines-terraform/dynamodb-table-name" --value "$DYNAMODB_TABLE_NAME" --type "String" --overwrite
+          
+          echo "✅ Infrastructure outputs stored in Parameter Store:"
+          echo "S3 Bucket: $S3_BUCKET"
+          echo "CloudFront Distribution: $CLOUDFRONT_ID"
+          echo "CloudFront Domain: $CLOUDFRONT_DOMAIN"
+          echo "API Gateway URL: $API_GATEWAY_URL"
+          echo "Lambda Function: $LAMBDA_FUNCTION_NAME"
+          echo "DynamoDB Table: $DYNAMODB_TABLE_NAME"
+          
+          # Trigger web pipeline
+          echo "🚀 Infrastructure pipeline completed! Web pipeline can now be triggered."

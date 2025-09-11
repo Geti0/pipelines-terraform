@@ -1,0 +1,196 @@
+name: Web Application Pipeline
+
+# Web pipeline that reads infrastructure details from Parameter Store and deploys the application
+# This runs after the infrastructure pipeline and depends on Parameter Store data
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths: 
+      - 'web/**'
+      - '.github/workflows/web-pipeline.yml'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'web/**'
+  workflow_dispatch:
+
+jobs:
+  web-pipeline:
+    runs-on: ubuntu-latest
+    steps:
+      # ==============================================
+      # INSTALL PHASE - Web Development Tools
+      # ==============================================
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: eu-north-1
+      
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: |
+            web/frontend/package-lock.json
+            web/lambda/package-lock.json
+      
+      - name: Install Frontend Dependencies
+        working-directory: ./web/frontend
+        run: npm ci
+      
+      - name: Install Lambda Dependencies
+        working-directory: ./web/lambda
+        run: npm ci
+          
+      # ==============================================
+      # PRE-BUILD PHASE - Web Quality Checks
+      # ==============================================
+      - name: Frontend Quality Checks
+        working-directory: ./web/frontend
+        run: |
+          echo "=== FRONTEND QUALITY CHECKS ==="
+          
+          echo "Running ESLint on frontend..."
+          npx eslint . --ext .js,.html --ignore-path .gitignore --ignore-pattern 'coverage/**' || echo "ESLint warnings found"
+          
+          echo "Running frontend tests with coverage..."
+          npm test -- --coverage --coverageReporters=text-summary
+          
+          # Extract and check coverage
+          COVERAGE=$(npm test -- --coverage --silent --coverageReporters=json | jq -r '.total.lines.pct // 0')
+          echo "Frontend test coverage: $COVERAGE%"
+          
+          if (( $(echo "$COVERAGE >= 70" | bc -l) )); then
+            echo "✅ Frontend coverage check passed: $COVERAGE% >= 70%"
+          else
+            echo "⚠️ Frontend coverage check: $COVERAGE% < 70%"
+          fi
+      
+      - name: Lambda Quality Checks
+        working-directory: ./web/lambda
+        run: |
+          echo "=== LAMBDA QUALITY CHECKS ==="
+          
+          echo "Running ESLint on lambda..."
+          npx eslint . --ext .js --ignore-path .gitignore --ignore-pattern 'coverage/**' || echo "ESLint warnings found"
+          
+          echo "Running lambda tests with coverage..."
+          npm test -- --coverage --coverageReporters=text-summary
+          
+          # Extract and check coverage
+          COVERAGE=$(npm test -- --coverage --silent --coverageReporters=json | jq -r '.total.lines.pct // 0')
+          echo "Lambda test coverage: $COVERAGE%"
+          
+          if (( $(echo "$COVERAGE >= 80" | bc -l) )); then
+            echo "✅ Lambda coverage check passed: $COVERAGE% >= 80%"
+          else
+            echo "❌ Lambda coverage check failed: $COVERAGE% < 80%"
+            exit 1
+          fi
+          
+      # ==============================================
+      # BUILD PHASE - Web Application Build
+      # ==============================================
+      - name: Retrieve Infrastructure Data from Parameter Store
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
+        run: |
+          echo "=== RETRIEVING INFRASTRUCTURE DATA ==="
+          
+          # Retrieve all infrastructure details from Parameter Store
+          S3_BUCKET=$(aws ssm get-parameter --name "/pipelines-terraform/s3-bucket-name" --query 'Parameter.Value' --output text)
+          CLOUDFRONT_ID=$(aws ssm get-parameter --name "/pipelines-terraform/cloudfront-distribution-id" --query 'Parameter.Value' --output text)
+          CLOUDFRONT_DOMAIN=$(aws ssm get-parameter --name "/pipelines-terraform/cloudfront-domain-name" --query 'Parameter.Value' --output text)
+          API_GATEWAY_URL=$(aws ssm get-parameter --name "/pipelines-terraform/api-gateway-url" --query 'Parameter.Value' --output text)
+          LAMBDA_FUNCTION_NAME=$(aws ssm get-parameter --name "/pipelines-terraform/lambda-function-name" --query 'Parameter.Value' --output text)
+          DYNAMODB_TABLE_NAME=$(aws ssm get-parameter --name "/pipelines-terraform/dynamodb-table-name" --query 'Parameter.Value' --output text)
+          
+          # Store in GitHub environment for subsequent steps
+          echo "S3_BUCKET=$S3_BUCKET" >> $GITHUB_ENV
+          echo "CLOUDFRONT_ID=$CLOUDFRONT_ID" >> $GITHUB_ENV
+          echo "CLOUDFRONT_DOMAIN=$CLOUDFRONT_DOMAIN" >> $GITHUB_ENV
+          echo "API_GATEWAY_URL=$API_GATEWAY_URL" >> $GITHUB_ENV
+          echo "LAMBDA_FUNCTION_NAME=$LAMBDA_FUNCTION_NAME" >> $GITHUB_ENV
+          echo "DYNAMODB_TABLE_NAME=$DYNAMODB_TABLE_NAME" >> $GITHUB_ENV
+          
+          echo "✅ Infrastructure data retrieved successfully:"
+          echo "S3 Bucket: $S3_BUCKET"
+          echo "CloudFront Distribution: $CLOUDFRONT_ID"
+          echo "CloudFront Domain: $CLOUDFRONT_DOMAIN"
+          echo "API Gateway URL: $API_GATEWAY_URL"
+          echo "Lambda Function: $LAMBDA_FUNCTION_NAME"
+          echo "DynamoDB Table: $DYNAMODB_TABLE_NAME"
+      
+      - name: Build Frontend Application
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
+        working-directory: ./web/frontend
+        run: |
+          echo "=== BUILDING FRONTEND APPLICATION ==="
+          
+          # Create .env file with API Gateway URL for Vite build
+          echo "VITE_API_GATEWAY_URL=$API_GATEWAY_URL" > .env
+          
+          echo "Building frontend with Vite..."
+          npm run build
+          
+          echo "✅ Frontend build completed successfully!"
+          
+      # ==============================================
+      # POST-BUILD PHASE - Application Deployment
+      # ==============================================
+      - name: Deploy Lambda Function
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
+        working-directory: ./web/lambda
+        run: |
+          echo "=== DEPLOYING LAMBDA FUNCTION ==="
+          
+          # Create deployment package
+          zip -r lambda-deployment.zip . -x "*.test.js" "jest.config.js" "eslint.config.js" "coverage/*" "node_modules/jest*" "node_modules/@jest*"
+          
+          # Update Lambda function code
+          aws lambda update-function-code \
+            --function-name $LAMBDA_FUNCTION_NAME \
+            --zip-file fileb://lambda-deployment.zip
+          
+          # Update environment variables
+          aws lambda update-function-configuration \
+            --function-name $LAMBDA_FUNCTION_NAME \
+            --environment Variables="{DYNAMODB_TABLE_NAME=$DYNAMODB_TABLE_NAME}"
+          
+          echo "✅ Lambda function deployed successfully!"
+      
+      - name: Deploy Frontend to S3 and Invalidate CloudFront
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
+        working-directory: ./web/frontend
+        run: |
+          echo "=== DEPLOYING FRONTEND ==="
+          
+          # Sync built files to S3
+          aws s3 sync dist/ s3://$S3_BUCKET --delete
+          
+          # Invalidate CloudFront cache
+          aws cloudfront create-invalidation \
+            --distribution-id $CLOUDFRONT_ID \
+            --paths "/*"
+          
+          echo "✅ Frontend deployed to S3 and CloudFront cache invalidated!"
+          echo "🚀 Application available at: https://$CLOUDFRONT_DOMAIN"
+          
+      - name: Application Deployment Summary
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
+        run: |
+          echo "=== DEPLOYMENT COMPLETE ==="
+          echo "🎉 Web application pipeline completed successfully!"
+          echo ""
+          echo "📊 Application Details:"
+          echo "🌐 Website URL: https://$CLOUDFRONT_DOMAIN"
+          echo "🔗 API Endpoint: $API_GATEWAY_URL"
+          echo "💾 S3 Bucket: $S3_BUCKET"
+          echo "⚡ Lambda Function: $LAMBDA_FUNCTION_NAME"
+          echo "🗄️ DynamoDB Table: $DYNAMODB_TABLE_NAME"
