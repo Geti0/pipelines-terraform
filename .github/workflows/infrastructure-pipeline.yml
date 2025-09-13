@@ -1,8 +1,5 @@
 name: Infrastructure Pipeline
 
-# Terraform pipeline that provisions AWS infrastructure and stores outputs in Parameter Store
-# This runs first and stores infrastructure details for the web pipeline to use
-
 on:
   push:
     branches: [ main, develop ]
@@ -22,9 +19,6 @@ jobs:
       run:
         working-directory: ./infra/terraform
     steps:
-      # ==============================================
-      # INSTALL PHASE - Infrastructure Tools
-      # ==============================================
       - name: Checkout code
         uses: actions/checkout@v3
       
@@ -46,128 +40,52 @@ jobs:
         with:
           go-version: '1.19'
           
-      - name: Install TFLint
-        uses: terraform-linters/setup-tflint@v1
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install Tools
+        run: |
+          # Install quality check tools
+          pip install checkov
+          # Install TFLint
+          curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
           
-      - name: Install Checkov
-        run: pip install checkov
-          
-      # ==============================================
-      # PRE-BUILD PHASE - Infrastructure Quality Checks
-      # ==============================================
       - name: Infrastructure Quality Checks
         run: |
-          echo "=== INFRASTRUCTURE QUALITY CHECKS ==="
-          
-          echo "Running Terraform format check..."
-          terraform fmt -check || (echo "❌ Terraform format check failed. Running terraform fmt..." && terraform fmt && echo "✅ Files formatted")
-          
-          echo "Running Terraform validation..."
-          terraform init
-          terraform validate
-          
-          echo "Running TFLint..."
-          tflint --init || echo "⚠️ TFLint init failed, continuing..."
-          tflint || echo "⚠️ TFLint found issues, but continuing..."
-          
-          echo "Running Checkov security scan..."
-          checkov -d . --quiet || echo "⚠️ Checkov found security issues, but continuing..."
+          chmod +x ../../.github/scripts/quality-checks.sh
+          ../../.github/scripts/quality-checks.sh terraform
       
-      - name: Terratest Infrastructure Tests
+      - name: Run Infrastructure Tests
         run: |
-          echo "Running Terratest..."
+          echo "Running Terratest validation..."
           cd ../test
           go mod tidy || echo "⚠️ Go mod tidy failed, continuing..."
-          
-          # Run tests with timeout and continue on error
           echo "⚠️ Terratest requires real AWS infrastructure, running in validation mode only..."
           go test -v -timeout 5m || echo "⚠️ Terratest completed with warnings (expected without real infrastructure)"
+        continue-on-error: true
           
-          echo "✅ Infrastructure validation completed"
-        continue-on-error: true  # Don't fail if Go tests have issues
-          
-      # ==============================================
-      # BUILD PHASE - Infrastructure Deployment
-      # ==============================================
       - name: Deploy Infrastructure
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
         run: |
-          echo "=== INFRASTRUCTURE DEPLOYMENT ==="
+          echo "Creating and applying Terraform plan safely..."
           
-          echo "Creating Terraform plan..."
-          terraform plan -out=tfplan
+          # Use safe terraform script for controlled deployments
+          chmod +x ../../.github/scripts/safe-terraform-apply.sh
           
-          echo "Applying Terraform infrastructure..."
-          terraform apply -auto-approve tfplan
+          # Create plan first
+          ../../.github/scripts/safe-terraform-apply.sh plan
           
-          echo "Infrastructure deployed successfully!"
+          # Find the most recent plan file
+          PLAN_FILE=$(ls tfplan-* 2>/dev/null | tail -1 || echo "")
           
-      # ==============================================
-      # POST-BUILD PHASE - Store Outputs in Parameter Store
-      # ==============================================
-      - name: Store Infrastructure Outputs in Parameter Store
+          if [[ -n "$PLAN_FILE" ]]; then
+            echo "Applying plan: $PLAN_FILE"
+            # Auto-apply in CI/CD (skip interactive prompts)
+            terraform apply -auto-approve "$PLAN_FILE"
+            echo "✅ Infrastructure deployed successfully!"
+          else
+            echo "✅ No changes needed - infrastructure is up to date!"
+          fi
+          
+      - name: Store Infrastructure Outputs
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
         run: |
-          echo "=== STORING INFRASTRUCTURE OUTPUTS ==="
-          
-          # Get infrastructure outputs with error handling
-          echo "Extracting Terraform outputs..."
-          
-          if ! S3_BUCKET=$(terraform output -raw s3_bucket_name 2>/dev/null); then
-            echo "❌ Failed to get S3 bucket name"
-            terraform output
-            exit 1
-          fi
-          
-          if ! CLOUDFRONT_ID=$(terraform output -raw cloudfront_distribution_id 2>/dev/null); then
-            echo "❌ Failed to get CloudFront distribution ID"
-            terraform output
-            exit 1
-          fi
-          
-          if ! CLOUDFRONT_DOMAIN=$(terraform output -raw cloudfront_domain_name 2>/dev/null); then
-            echo "❌ Failed to get CloudFront domain name"
-            terraform output
-            exit 1
-          fi
-          
-          if ! API_GATEWAY_URL=$(terraform output -raw api_gateway_url 2>/dev/null); then
-            echo "❌ Failed to get API Gateway URL"
-            terraform output
-            exit 1
-          fi
-          
-          if ! LAMBDA_FUNCTION_NAME=$(terraform output -raw lambda_function_name 2>/dev/null); then
-            echo "❌ Failed to get Lambda function name"
-            terraform output
-            exit 1
-          fi
-          
-          if ! DYNAMODB_TABLE_NAME=$(terraform output -raw dynamodb_table_name 2>/dev/null); then
-            echo "❌ Failed to get DynamoDB table name"
-            terraform output
-            exit 1
-          fi
-          
-          echo "✅ Successfully extracted all outputs:"
-          echo "S3 Bucket: $S3_BUCKET"
-          echo "CloudFront Distribution: $CLOUDFRONT_ID"
-          echo "CloudFront Domain: $CLOUDFRONT_DOMAIN"
-          echo "API Gateway URL: $API_GATEWAY_URL"
-          echo "Lambda Function: $LAMBDA_FUNCTION_NAME"
-          echo "DynamoDB Table: $DYNAMODB_TABLE_NAME"
-          
-          echo "Storing outputs in Parameter Store..."
-          
-          # Store each output in Parameter Store with overwrite
-          aws ssm put-parameter --name "/pipelines-terraform/s3-bucket-name" --value "$S3_BUCKET" --type "String" --overwrite
-          aws ssm put-parameter --name "/pipelines-terraform/cloudfront-distribution-id" --value "$CLOUDFRONT_ID" --type "String" --overwrite
-          aws ssm put-parameter --name "/pipelines-terraform/cloudfront-domain-name" --value "$CLOUDFRONT_DOMAIN" --type "String" --overwrite
-          aws ssm put-parameter --name "/pipelines-terraform/api-gateway-url" --value "$API_GATEWAY_URL" --type "String" --overwrite
-          aws ssm put-parameter --name "/pipelines-terraform/lambda-function-name" --value "$LAMBDA_FUNCTION_NAME" --type "String" --overwrite
-          aws ssm put-parameter --name "/pipelines-terraform/dynamodb-table-name" --value "$DYNAMODB_TABLE_NAME" --type "String" --overwrite
-          
-          echo "✅ Infrastructure outputs stored in Parameter Store successfully!"
-          echo "🚀 Infrastructure pipeline completed! Web pipeline can now be triggered."
+          chmod +x ../../.github/scripts/store-infrastructure-outputs.sh
+          ../../.github/scripts/store-infrastructure-outputs.sh

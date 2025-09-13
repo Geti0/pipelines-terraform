@@ -1,8 +1,5 @@
 name: Web Application Pipeline
 
-# Web pipeline that reads infrastructure details from Parameter Store and deploys the application
-# This runs after the infrastructure pipeline completes successfully
-
 on:
   push:
     branches: [ main, develop ]
@@ -23,16 +20,12 @@ on:
 jobs:
   web-pipeline:
     runs-on: ubuntu-latest
-    # Only run if infrastructure pipeline was successful or if manually triggered/pushed
     if: >
       (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') ||
       github.event_name == 'push' ||
       github.event_name == 'pull_request' ||
       github.event_name == 'workflow_dispatch'
     steps:
-      # ==============================================
-      # INSTALL PHASE - Web Development Tools
-      # ==============================================
       - name: Checkout code
         uses: actions/checkout@v3
       
@@ -52,220 +45,31 @@ jobs:
             web/frontend/package-lock.json
             web/lambda/package-lock.json
       
-      - name: Install System Dependencies
+      - name: Install Dependencies
         run: |
-          # Install bc for arithmetic operations (if needed)
-          sudo apt-get update
-          sudo apt-get install -y bc
+          # Install frontend dependencies
+          cd web/frontend && npm ci
+          # Install lambda dependencies
+          cd ../lambda && npm ci
       
-      - name: Install Frontend Dependencies
-        working-directory: ./web/frontend
-        run: npm ci
-      
-      - name: Install Lambda Dependencies
-        working-directory: ./web/lambda
-        run: npm ci
-          
-      # ==============================================
-      # PRE-BUILD PHASE - Web Quality Checks
-      # ==============================================
       - name: Frontend Quality Checks
-        working-directory: ./web/frontend
         run: |
-          echo "=== FRONTEND QUALITY CHECKS ==="
-          
-          echo "Running ESLint on frontend..."
-          npx eslint . --ext .js,.html || echo "ESLint warnings found"
-          
-          echo "Running frontend tests with coverage..."
-          npm test -- --coverage --coverageReporters=text-summary
-          
-          # Simple coverage check without jq dependency
-          echo "Checking frontend coverage..."
-          if [ -f coverage/coverage-summary.json ]; then
-            echo "✅ Frontend coverage report generated"
-          else
-            echo "⚠️ Frontend coverage report not found - tests may have 0% coverage"
-          fi
+          chmod +x .github/scripts/quality-checks.sh
+          .github/scripts/quality-checks.sh frontend
       
       - name: Lambda Quality Checks
-        working-directory: ./web/lambda
         run: |
-          echo "=== LAMBDA QUALITY CHECKS ==="
+          chmod +x .github/scripts/quality-checks.sh
+          .github/scripts/quality-checks.sh lambda
           
-          echo "Running ESLint on lambda..."
-          npx eslint . --ext .js || echo "ESLint warnings found"
-          
-          echo "Running lambda tests with coverage..."
-          npm test -- --coverage --coverageReporters=text-summary
-          
-          # Simple coverage check without jq dependency
-          echo "Checking lambda coverage..."
-          if [ -f coverage/coverage-summary.json ]; then
-            echo "✅ Lambda coverage report generated"
-          else
-            echo "⚠️ Lambda coverage report not found"
-          fi
-          
-      # ==============================================
-      # BUILD PHASE - Web Application Build
-      # ==============================================
-      - name: Retrieve Infrastructure Data from Parameter Store
+      - name: Retrieve Infrastructure Data
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
         run: |
-          echo "=== RETRIEVING INFRASTRUCTURE DATA ==="
+          chmod +x .github/scripts/retrieve-infrastructure-data.sh
+          .github/scripts/retrieve-infrastructure-data.sh
           
-          # Retrieve all infrastructure details from Parameter Store
-          S3_BUCKET=$(aws ssm get-parameter --name "/pipelines-terraform/s3-bucket-name" --query 'Parameter.Value' --output text 2>/dev/null || echo "")
-          CLOUDFRONT_ID=$(aws ssm get-parameter --name "/pipelines-terraform/cloudfront-distribution-id" --query 'Parameter.Value' --output text 2>/dev/null || echo "")
-          CLOUDFRONT_DOMAIN=$(aws ssm get-parameter --name "/pipelines-terraform/cloudfront-domain-name" --query 'Parameter.Value' --output text 2>/dev/null || echo "")
-          API_GATEWAY_URL=$(aws ssm get-parameter --name "/pipelines-terraform/api-gateway-url" --query 'Parameter.Value' --output text 2>/dev/null || echo "")
-          LAMBDA_FUNCTION_NAME=$(aws ssm get-parameter --name "/pipelines-terraform/lambda-function-name" --query 'Parameter.Value' --output text 2>/dev/null || echo "")
-          DYNAMODB_TABLE_NAME=$(aws ssm get-parameter --name "/pipelines-terraform/dynamodb-table-name" --query 'Parameter.Value' --output text 2>/dev/null || echo "")
-          
-          # Store in GitHub environment for subsequent steps
-          echo "S3_BUCKET=$S3_BUCKET" >> $GITHUB_ENV
-          echo "CLOUDFRONT_ID=$CLOUDFRONT_ID" >> $GITHUB_ENV
-          echo "CLOUDFRONT_DOMAIN=$CLOUDFRONT_DOMAIN" >> $GITHUB_ENV
-          echo "API_GATEWAY_URL=$API_GATEWAY_URL" >> $GITHUB_ENV
-          echo "LAMBDA_FUNCTION_NAME=$LAMBDA_FUNCTION_NAME" >> $GITHUB_ENV
-          echo "DYNAMODB_TABLE_NAME=$DYNAMODB_TABLE_NAME" >> $GITHUB_ENV
-          
-          echo "✅ Infrastructure data retrieved successfully:"
-          echo "S3 Bucket: $S3_BUCKET"
-          echo "CloudFront Distribution: $CLOUDFRONT_ID"
-          echo "CloudFront Domain: $CLOUDFRONT_DOMAIN"
-          echo "API Gateway URL: $API_GATEWAY_URL"
-          echo "Lambda Function: $LAMBDA_FUNCTION_NAME"
-          echo "DynamoDB Table: $DYNAMODB_TABLE_NAME"
-      
-      - name: Build Frontend Application
-        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
-        working-directory: ./web/frontend
-        run: |
-          echo "=== BUILDING FRONTEND APPLICATION ==="
-          
-          # Create .env file with API Gateway URL for Vite build
-          echo "VITE_API_GATEWAY_URL=$API_GATEWAY_URL" > .env
-          
-          echo "Building frontend with Vite..."
-          npm run build
-          
-          echo "✅ Frontend build completed successfully!"
-          
-      # ==============================================
-      # POST-BUILD PHASE - Application Deployment
-      # ==============================================
-      - name: Deploy Lambda Function
-        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
-        working-directory: ./web/lambda
-        run: |
-          echo "=== DEPLOYING LAMBDA FUNCTION ==="
-          
-          # Create deployment package
-          zip -r lambda-deployment.zip . -x "*.test.js" "jest.config.js" "eslint.config.js" "coverage/*" "node_modules/jest*" "node_modules/@jest*"
-          
-          # Function to wait for Lambda to be ready
-          wait_for_lambda_ready() {
-            local func_name=$1
-            local max_attempts=30
-            local attempt=1
-            
-            echo "Waiting for Lambda function to be ready..."
-            while [ $attempt -le $max_attempts ]; do
-              status=$(aws lambda get-function --function-name "$func_name" --query 'Configuration.State' --output text 2>/dev/null || echo "Failed")
-              if [ "$status" = "Active" ]; then
-                echo "✅ Lambda function is ready (attempt $attempt)"
-                return 0
-              elif [ "$status" = "Failed" ]; then
-                echo "❌ Lambda function is in Failed state"
-                return 1
-              else
-                echo "⏳ Lambda function state: $status (attempt $attempt/$max_attempts)"
-                sleep 10
-                attempt=$((attempt + 1))
-              fi
-            done
-            echo "❌ Timeout waiting for Lambda function to be ready"
-            return 1
-          }
-          
-          # Function to update Lambda with retries
-          update_lambda_with_retry() {
-            local operation=$1
-            local max_attempts=5
-            local attempt=1
-            
-            while [ $attempt -le $max_attempts ]; do
-              echo "Attempting $operation (attempt $attempt/$max_attempts)..."
-              
-              if [ "$operation" = "code" ]; then
-                if aws lambda update-function-code \
-                  --function-name $LAMBDA_FUNCTION_NAME \
-                  --zip-file fileb://lambda-deployment.zip; then
-                  echo "✅ Lambda code updated successfully"
-                  return 0
-                fi
-              elif [ "$operation" = "config" ]; then
-                if aws lambda update-function-configuration \
-                  --function-name $LAMBDA_FUNCTION_NAME \
-                  --environment Variables="{DYNAMODB_TABLE_NAME=$DYNAMODB_TABLE_NAME}"; then
-                  echo "✅ Lambda configuration updated successfully"
-                  return 0
-                fi
-              fi
-              
-              if [ $attempt -lt $max_attempts ]; then
-                echo "⚠️ Update failed, waiting 30 seconds before retry..."
-                sleep 30
-              fi
-              attempt=$((attempt + 1))
-            done
-            
-            echo "❌ Failed to update Lambda $operation after $max_attempts attempts"
-            return 1
-          }
-          
-          # Wait for Lambda to be ready before any updates
-          wait_for_lambda_ready $LAMBDA_FUNCTION_NAME
-          
-          # Update Lambda function code with retries
-          update_lambda_with_retry "code"
-          
-          # Wait for code update to complete before config update
-          wait_for_lambda_ready $LAMBDA_FUNCTION_NAME
-          
-          # Update environment variables with retries
-          update_lambda_with_retry "config"
-          
-          echo "✅ Lambda function deployed successfully!"
-      
-      - name: Deploy Frontend to S3 and Invalidate CloudFront
-        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
-        working-directory: ./web/frontend
-        run: |
-          echo "=== DEPLOYING FRONTEND ==="
-          
-          # Sync built files to S3
-          aws s3 sync dist/ s3://$S3_BUCKET --delete
-          
-          # Invalidate CloudFront cache
-          aws cloudfront create-invalidation \
-            --distribution-id $CLOUDFRONT_ID \
-            --paths "/*"
-          
-          echo "✅ Frontend deployed to S3 and CloudFront cache invalidated!"
-          echo "🚀 Application available at: https://$CLOUDFRONT_DOMAIN"
-          
-      - name: Application Deployment Summary
+      - name: Deploy Application
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
         run: |
-          echo "=== DEPLOYMENT COMPLETE ==="
-          echo "🎉 Web application pipeline completed successfully!"
-          echo ""
-          echo "📊 Application Details:"
-          echo "🌐 Website URL: https://$CLOUDFRONT_DOMAIN"
-          echo "🔗 API Endpoint: $API_GATEWAY_URL"
-          echo "💾 S3 Bucket: $S3_BUCKET"
-          echo "⚡ Lambda Function: $LAMBDA_FUNCTION_NAME"
-          echo "🗄️ DynamoDB Table: $DYNAMODB_TABLE_NAME"
+          chmod +x .github/scripts/deploy-application.sh
+          .github/scripts/deploy-application.sh
