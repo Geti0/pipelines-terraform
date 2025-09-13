@@ -36,6 +36,34 @@ terraform_checks() {
     
     log_info "Running Terraform quality checks..."
     
+    # Handle both relative and absolute paths
+    if [[ ! -d "$terraform_dir" ]]; then
+        # Try from repository root
+        terraform_dir="$(pwd)/infra/terraform"
+        if [[ ! -d "$terraform_dir" ]]; then
+            # Try going up directories to find the right path
+            for i in {1..3}; do
+                test_dir="../"
+                for j in $(seq 1 $i); do
+                    test_dir="../$test_dir"
+                done
+                test_dir="${test_dir}infra/terraform"
+                if [[ -d "$test_dir" ]]; then
+                    terraform_dir="$test_dir"
+                    break
+                fi
+            done
+        fi
+    fi
+    
+    if [[ ! -d "$terraform_dir" ]]; then
+        log_error "Cannot find Terraform directory: $terraform_dir"
+        log_error "Current directory: $(pwd)"
+        log_error "Directory contents: $(ls -la)"
+        return 1
+    fi
+    
+    log_info "Using Terraform directory: $terraform_dir"
     cd "$terraform_dir"
     
     # Format check

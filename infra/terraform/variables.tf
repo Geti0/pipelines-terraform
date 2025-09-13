@@ -23,9 +23,3 @@ variable "deployment_id" {
   type        = string
   default     = "deploy"
 }
-
-variable "github_token" {
-  description = "GitHub personal access token for CI/CD"
-  type        = string
-  sensitive   = true
-}

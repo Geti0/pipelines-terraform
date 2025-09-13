@@ -28,9 +28,11 @@ locals {
 
 # Output deployment strategy for other modules
 output "deployment_strategy" {
-  value = local.deployment_strategy
+  description = "Current deployment strategy configuration and settings"
+  value       = local.deployment_strategy
 }
 
 output "resource_versions" {
-  value = local.resource_versions
+  description = "Version tracking for all infrastructure resources"
+  value       = local.resource_versions
 }
