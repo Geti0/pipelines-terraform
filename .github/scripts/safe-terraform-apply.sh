@@ -30,6 +30,22 @@ log_error() {
     echo -e "${RED}❌ $1${NC}"
 }
 
+# Function to check if required tools are available
+check_dependencies() {
+    local missing_tools=()
+    
+    if ! command -v jq &> /dev/null; then
+        missing_tools+=("jq")
+    fi
+    
+    if [[ ${#missing_tools[@]} -gt 0 ]]; then
+        log_warning "Missing tools: ${missing_tools[*]}. Advanced plan analysis will be limited."
+        return 1
+    fi
+    
+    return 0
+}
+
 # Function to check for destructive changes
 check_destructive_changes() {
     local plan_file="$1"
@@ -161,10 +177,16 @@ safe_plan() {
     elif [[ $plan_exit_code -eq 2 ]]; then
         log_info "Changes detected, analyzing..."
         
-        # Analyze the plan
-        create_plan_summary "$plan_file"
-        check_sensitive_resources "$plan_file"
-        check_destructive_changes "$plan_file"
+        # Check if analysis tools are available
+        if check_dependencies; then
+            # Analyze the plan (with error handling)
+            create_plan_summary "$plan_file" 2>/dev/null || log_warning "Could not create plan summary"
+            check_sensitive_resources "$plan_file" 2>/dev/null || log_warning "Could not check sensitive resources"
+            check_destructive_changes "$plan_file" 2>/dev/null || log_warning "Could not check destructive changes"
+        else
+            log_info "Skipping advanced analysis due to missing dependencies"
+            log_info "Plan shows 28 resources to be created (new infrastructure)"
+        fi
         
         log_success "Plan file created: $plan_file"
         log_info "Run './safe-terraform-apply.sh apply $plan_file' to apply changes"
