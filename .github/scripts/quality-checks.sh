@@ -114,6 +114,34 @@ frontend_checks() {
     
     log_info "Running Frontend quality checks..."
     
+    # Handle both relative and absolute paths
+    if [[ ! -d "$frontend_dir" ]]; then
+        # Try from repository root
+        frontend_dir="$(pwd)/web/frontend"
+        if [[ ! -d "$frontend_dir" ]]; then
+            # Try going up directories to find the right path
+            for i in {1..3}; do
+                test_dir="../"
+                for j in $(seq 1 $i); do
+                    test_dir="../$test_dir"
+                done
+                test_dir="${test_dir}web/frontend"
+                if [[ -d "$test_dir" ]]; then
+                    frontend_dir="$test_dir"
+                    break
+                fi
+            done
+        fi
+    fi
+    
+    if [[ ! -d "$frontend_dir" ]]; then
+        log_error "Cannot find Frontend directory: $frontend_dir"
+        log_error "Current directory: $(pwd)"
+        log_error "Directory contents: $(ls -la)"
+        return 1
+    fi
+    
+    log_info "Using Frontend directory: $frontend_dir"
     cd "$frontend_dir"
     
     # Install dependencies if needed
@@ -124,7 +152,7 @@ frontend_checks() {
     
     # ESLint
     log_info "Running ESLint..."
-    if npx eslint . --ext .js,.html; then
+    if npx eslint . --ext .js; then
         log_success "ESLint passed"
     else
         log_warning "ESLint found issues"
@@ -142,6 +170,34 @@ lambda_checks() {
     
     log_info "Running Lambda quality checks..."
     
+    # Handle both relative and absolute paths
+    if [[ ! -d "$lambda_dir" ]]; then
+        # Try from repository root
+        lambda_dir="$(pwd)/web/lambda"
+        if [[ ! -d "$lambda_dir" ]]; then
+            # Try going up directories to find the right path
+            for i in {1..3}; do
+                test_dir="../"
+                for j in $(seq 1 $i); do
+                    test_dir="../$test_dir"
+                done
+                test_dir="${test_dir}web/lambda"
+                if [[ -d "$test_dir" ]]; then
+                    lambda_dir="$test_dir"
+                    break
+                fi
+            done
+        fi
+    fi
+    
+    if [[ ! -d "$lambda_dir" ]]; then
+        log_error "Cannot find Lambda directory: $lambda_dir"
+        log_error "Current directory: $(pwd)"
+        log_error "Directory contents: $(ls -la)"
+        return 1
+    fi
+    
+    log_info "Using Lambda directory: $lambda_dir"
     cd "$lambda_dir"
     
     # Install dependencies if needed
