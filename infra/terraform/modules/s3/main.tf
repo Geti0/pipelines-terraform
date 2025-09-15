@@ -7,6 +7,23 @@ resource "aws_s3_bucket" "website" {
     Name        = "${var.project_name}-website"
     Environment = var.environment
   }
+
+  lifecycle {
+    prevent_destroy = true
+    ignore_changes = [
+      tags,
+      website,
+      acl,
+      force_destroy,
+      logging,
+      versioning,
+      object_lock_configuration,
+      replication_configuration,
+      cors_rule,
+      server_side_encryption_configuration,
+      policy,
+    ]
+  }
 }
 
 # Enable S3 bucket encryption
