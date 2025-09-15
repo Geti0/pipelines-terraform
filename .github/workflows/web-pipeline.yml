@@ -45,11 +45,11 @@ jobs:
           (cd web/lambda && npm ci --quiet) &
           wait
       
-      # Run quality checks in parallel
+      # Run quality checks for web components only (not terraform)
       - name: Quality Checks
         run: |
           chmod +x .github/scripts/quality-checks.sh
-          .github/scripts/quality-checks.sh all
+          .github/scripts/quality-checks.sh web
       
       # Deploy only on main/develop
       - name: Deploy Application
