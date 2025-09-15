@@ -1,75 +1,64 @@
-name: Web Application Pipeline
+name: Web Pipeline
 
 on:
   push:
-    branches: [ main, develop ]
-    paths: 
-      - 'web/**'
-      - '.github/workflows/web-pipeline.yml'
+    branches: [main, develop]
+    paths: ['web/**', '.github/**']
   pull_request:
-    branches: [ main, develop ]
-    paths:
-      - 'web/**'
+    paths: ['web/**']
   workflow_dispatch:
   workflow_run:
     workflows: ["Infrastructure Pipeline"]
-    types:
-      - completed
-    branches: [ main, develop ]
+    types: [completed]
+
+env:
+  AWS_REGION: eu-north-1
+  NODE_ENV: production
+  CI: true
 
 jobs:
-  web-pipeline:
+  deploy:
     runs-on: ubuntu-latest
     if: >
-      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') ||
-      github.event_name == 'push' ||
-      github.event_name == 'pull_request' ||
-      github.event_name == 'workflow_dispatch'
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+      github.event_name != 'workflow_run' || 
+      github.event.workflow_run.conclusion == 'success'
       
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
+    steps:
+      - uses: actions/checkout@v3
+      
+      - uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: eu-north-1
+          aws-region: ${{ env.AWS_REGION }}
       
-      - name: Set up Node.js
-        uses: actions/setup-node@v3
+      - uses: actions/setup-node@v3
         with:
-          node-version: '18'
-          cache: 'npm'
-          cache-dependency-path: |
-            web/frontend/package-lock.json
-            web/lambda/package-lock.json
+          node-version: 18
+          cache: npm
+          cache-dependency-path: 'web/*/package-lock.json'
       
+      # Install all dependencies in parallel
       - name: Install Dependencies
         run: |
-          # Install frontend dependencies
-          cd web/frontend && npm ci
-          # Install lambda dependencies
-          cd ../lambda && npm ci
+          (cd web/frontend && npm ci --quiet) &
+          (cd web/lambda && npm ci --quiet) &
+          wait
       
-      - name: Frontend Quality Checks
+      # Run quality checks in parallel
+      - name: Quality Checks
         run: |
           chmod +x .github/scripts/quality-checks.sh
-          .github/scripts/quality-checks.sh frontend
+          .github/scripts/quality-checks.sh all
       
-      - name: Lambda Quality Checks
-        run: |
-          chmod +x .github/scripts/quality-checks.sh
-          .github/scripts/quality-checks.sh lambda
-          
-      - name: Retrieve Infrastructure Data
-        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
-        run: |
-          chmod +x .github/scripts/retrieve-infrastructure-data.sh
-          .github/scripts/retrieve-infrastructure-data.sh
-          
+      # Deploy only on main/develop
       - name: Deploy Application
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
         run: |
+          # Retrieve infrastructure parameters
+          chmod +x .github/scripts/parameters.sh
+          .github/scripts/parameters.sh retrieve
+          
+          # Deploy application
           chmod +x .github/scripts/deploy-application.sh
           .github/scripts/deploy-application.sh

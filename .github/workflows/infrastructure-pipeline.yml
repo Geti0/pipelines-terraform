@@ -2,98 +2,70 @@ name: Infrastructure Pipeline
 
 on:
   push:
-    branches: [ main, develop ]
-    paths: 
-      - 'infra/**'
-      - '.github/workflows/infrastructure-pipeline.yml'
+    branches: [main, develop]
+    paths: ['infra/**', '.github/**']
   pull_request:
-    branches: [ main, develop ]
-    paths:
-      - 'infra/**'
+    paths: ['infra/**']
   workflow_dispatch:
 
+env:
+  AWS_REGION: eu-north-1
+  TF_IN_AUTOMATION: true
+  TF_INPUT: false
+
 jobs:
-  terraform-pipeline:
+  deploy:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./infra/terraform
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+    concurrency: 
+      group: terraform-${{ github.ref }}
+      cancel-in-progress: false
       
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
+    steps:
+      - uses: actions/checkout@v3
+      
+      - uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: eu-north-1
+          aws-region: ${{ env.AWS_REGION }}
       
-      - name: Set up Terraform
-        uses: hashicorp/setup-terraform@v2
+      - uses: hashicorp/setup-terraform@v2
         with:
           terraform_version: 1.5.0
           terraform_wrapper: false
       
-      - name: Set up Go
-        uses: actions/setup-go@v4
+      # Cache Terraform plugins for faster init
+      - uses: actions/cache@v3
         with:
-          go-version: '1.19'
-          
+          path: |
+            infra/terraform/.terraform
+            infra/terraform/.terraform.lock.hcl
+          key: terraform-${{ runner.os }}-${{ hashFiles('infra/terraform/*.tf') }}
+          restore-keys: terraform-${{ runner.os }}-
+      
+      # Install tools in parallel
       - name: Install Tools
         run: |
-          # Install quality check tools
-          pip install checkov
-          # Install TFLint
-          curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
-          # Install jq for JSON processing in scripts
-          sudo apt-get update && sudo apt-get install -y jq
-          
-      - name: Infrastructure Quality Checks
-        run: |
-          chmod +x ../../.github/scripts/quality-checks.sh
-          ../../.github/scripts/quality-checks.sh terraform
+          sudo apt-get update &
+          pip install checkov &
+          curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash &
+          wait
       
-      - name: Run Infrastructure Tests
+      # Quality checks
+      - name: Quality Check
         run: |
-          echo "Running Terratest validation..."
-          cd ../test
-          go mod tidy || echo "⚠️ Go mod tidy failed, continuing..."
-          echo "⚠️ Terratest requires real AWS infrastructure, running in validation mode only..."
-          go test -v -timeout 5m || echo "⚠️ Terratest completed with warnings (expected without real infrastructure)"
-        continue-on-error: true
-          
+          chmod +x .github/scripts/quality-checks.sh
+          .github/scripts/quality-checks.sh terraform
+      
+      # Deploy only on main/develop
       - name: Deploy Infrastructure
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
         run: |
-          echo "Creating and applying Terraform plan safely..."
+          chmod +x .github/scripts/terraform-apply.sh
+          .github/scripts/terraform-apply.sh
           
-          # Use safe terraform script for controlled deployments
-          chmod +x ../../.github/scripts/safe-terraform-apply.sh
-          
-          # Create plan first (with error handling for analysis issues)
-          if ../../.github/scripts/safe-terraform-apply.sh plan; then
-            echo "✅ Plan created successfully"
-          else
-            echo "⚠️ Plan creation had issues, but continuing with basic plan..."
-            # Fallback to basic terraform plan if safe script fails
-            terraform plan -out="tfplan-fallback-$(date +%Y%m%d-%H%M%S)"
-          fi
-          
-          # Find the most recent plan file
-          PLAN_FILE=$(ls tfplan-* 2>/dev/null | tail -1 || echo "")
-          
-          if [[ -n "$PLAN_FILE" ]]; then
-            echo "Applying plan: $PLAN_FILE"
-            # Auto-apply in CI/CD (skip interactive prompts)
-            terraform apply -auto-approve "$PLAN_FILE"
-            echo "✅ Infrastructure deployed successfully!"
-          else
-            echo "✅ No changes needed - infrastructure is up to date!"
-          fi
-          
-      - name: Store Infrastructure Outputs
-        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
+      - name: Store Outputs
+        if: success() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
         run: |
-          chmod +x ../../.github/scripts/store-infrastructure-outputs.sh
-          ../../.github/scripts/store-infrastructure-outputs.sh
+          chmod +x .github/scripts/parameters.sh
+          .github/scripts/parameters.sh store
