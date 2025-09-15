@@ -100,6 +100,33 @@ build_frontend() {
     
     log_info "Building frontend application..."
     
+    # Handle both relative and absolute paths
+    if [[ ! -d "$frontend_dir" ]]; then
+        # Try from repository root
+        frontend_dir="$(pwd)/web/frontend"
+        if [[ ! -d "$frontend_dir" ]]; then
+            # Try going up directories to find the right path
+            for i in {1..3}; do
+                test_dir="../"
+                for j in $(seq 1 $i); do
+                    test_dir="../$test_dir"
+                done
+                test_dir="${test_dir}web/frontend"
+                if [[ -d "$test_dir" ]]; then
+                    frontend_dir="$test_dir"
+                    break
+                fi
+            done
+        fi
+    fi
+    
+    if [[ ! -d "$frontend_dir" ]]; then
+        log_error "Frontend directory not found: $frontend_dir"
+        log_error "Current directory: $(pwd)"
+        return 1
+    fi
+    
+    log_info "Using Frontend directory: $frontend_dir"
     cd "$frontend_dir"
     
     # Create .env file with API Gateway URL
@@ -119,6 +146,33 @@ deploy_lambda() {
     
     log_info "Deploying Lambda function..."
     
+    # Handle both relative and absolute paths
+    if [[ ! -d "$lambda_dir" ]]; then
+        # Try from repository root
+        lambda_dir="$(pwd)/web/lambda"
+        if [[ ! -d "$lambda_dir" ]]; then
+            # Try going up directories to find the right path
+            for i in {1..3}; do
+                test_dir="../"
+                for j in $(seq 1 $i); do
+                    test_dir="../$test_dir"
+                done
+                test_dir="${test_dir}web/lambda"
+                if [[ -d "$test_dir" ]]; then
+                    lambda_dir="$test_dir"
+                    break
+                fi
+            done
+        fi
+    fi
+    
+    if [[ ! -d "$lambda_dir" ]]; then
+        log_error "Lambda directory not found: $lambda_dir"
+        log_error "Current directory: $(pwd)"
+        return 1
+    fi
+    
+    log_info "Using Lambda directory: $lambda_dir"
     cd "$lambda_dir"
     
     # Create deployment package
@@ -160,6 +214,33 @@ deploy_frontend() {
     
     log_info "Deploying frontend to S3..."
     
+    # Handle both relative and absolute paths
+    if [[ ! -d "$frontend_dir" ]]; then
+        # Try from repository root
+        frontend_dir="$(pwd)/web/frontend"
+        if [[ ! -d "$frontend_dir" ]]; then
+            # Try going up directories to find the right path
+            for i in {1..3}; do
+                test_dir="../"
+                for j in $(seq 1 $i); do
+                    test_dir="../$test_dir"
+                done
+                test_dir="${test_dir}web/frontend"
+                if [[ -d "$test_dir" ]]; then
+                    frontend_dir="$test_dir"
+                    break
+                fi
+            done
+        fi
+    fi
+    
+    if [[ ! -d "$frontend_dir" ]]; then
+        log_error "Frontend directory not found: $frontend_dir"
+        log_error "Current directory: $(pwd)"
+        return 1
+    fi
+    
+    log_info "Using Frontend directory: $frontend_dir"
     cd "$frontend_dir"
     
     # Validate required environment variables

@@ -10,6 +10,33 @@ set -euo pipefail
 TERRAFORM_DIR="${1:-./infra/terraform}"
 PARAMETER_PREFIX="/pipelines-terraform"
 
+# Robust path resolution for TERRAFORM_DIR
+if [[ ! -d "$TERRAFORM_DIR" ]]; then
+    # Try from repository root
+    TERRAFORM_DIR="$(pwd)/infra/terraform"
+    if [[ ! -d "$TERRAFORM_DIR" ]]; then
+        # Try going up directories to find the right path
+        for i in {1..3}; do
+            test_dir="../"
+            for j in $(seq 1 $i); do
+                test_dir="../$test_dir"
+            done
+            test_dir="${test_dir}infra/terraform"
+            if [[ -d "$test_dir" ]]; then
+                TERRAFORM_DIR="$test_dir"
+                break
+            fi
+        done
+    fi
+fi
+
+if [[ ! -d "$TERRAFORM_DIR" ]]; then
+    echo -e "\033[0;31m❌ Terraform directory not found: $TERRAFORM_DIR\033[0m"
+    echo -e "Current directory: $(pwd)"
+    echo -e "Directory contents: $(ls -la)"
+    exit 1
+fi
+
 # Color codes for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -40,12 +67,39 @@ get_terraform_output() {
     local value
     
     if value=$(terraform -chdir="$TERRAFORM_DIR" output -raw "$output_name" 2>/dev/null); then
-        echo "$value"
-        return 0
+        if [[ -n "$value" ]]; then
+            echo "$value"
+            return 0
+        else
+            log_warning "Output '$output_name' is empty"
+            return 1
+        fi
     else
-        log_error "Failed to get output: $output_name"
+        log_warning "Failed to get output: $output_name (may not exist or no state)"
         return 1
     fi
+}
+
+# Function to check if terraform state exists and has outputs
+check_terraform_state() {
+    if [[ ! -f "$TERRAFORM_DIR/terraform.tfstate" ]] && [[ ! -f "$TERRAFORM_DIR/.terraform/terraform.tfstate" ]]; then
+        log_warning "No terraform state found - infrastructure may not be deployed yet"
+        return 1
+    fi
+    
+    # Check if there are any outputs available
+    local output_list
+    if ! output_list=$(terraform -chdir="$TERRAFORM_DIR" output 2>/dev/null); then
+        log_warning "Cannot retrieve terraform outputs - state may be empty"
+        return 1
+    fi
+    
+    if [[ -z "$output_list" ]] || [[ "$output_list" == *"No outputs found"* ]]; then
+        log_warning "No terraform outputs found - infrastructure may not be fully deployed"
+        return 1
+    fi
+    
+    return 0
 }
 
 # Function to store parameter in SSM
@@ -70,11 +124,34 @@ store_parameter() {
 main() {
     log_info "Starting infrastructure outputs storage process..."
     
-    # Change to terraform directory if it exists
+    # Handle both relative and absolute paths
+    if [[ ! -d "$TERRAFORM_DIR" ]]; then
+        # Try from repository root
+        TERRAFORM_DIR="$(pwd)/infra/terraform"
+        if [[ ! -d "$TERRAFORM_DIR" ]]; then
+            # Try going up directories to find the right path
+            for i in {1..3}; do
+                test_dir="../"
+                for j in $(seq 1 $i); do
+                    test_dir="../$test_dir"
+                done
+                test_dir="${test_dir}infra/terraform"
+                if [[ -d "$test_dir" ]]; then
+                    TERRAFORM_DIR="$test_dir"
+                    break
+                fi
+            done
+        fi
+    fi
+    
     if [[ ! -d "$TERRAFORM_DIR" ]]; then
         log_error "Terraform directory not found: $TERRAFORM_DIR"
+        log_error "Current directory: $(pwd)"
+        log_error "Directory contents: $(ls -la)"
         exit 1
     fi
+    
+    log_info "Using Terraform directory: $TERRAFORM_DIR"
     
     # Define outputs to extract
     declare -A outputs=(
@@ -85,6 +162,13 @@ main() {
         ["lambda_function_name"]="lambda-function-name"
         ["dynamodb_table_name"]="dynamodb-table-name"
     )
+    
+    # Check if terraform state exists and has outputs
+    if ! check_terraform_state; then
+        log_warning "Infrastructure not deployed yet or no outputs available"
+        log_info "This is normal for the first deployment - outputs will be stored after 'terraform apply'"
+        exit 0
+    fi
     
     log_info "Extracting Terraform outputs..."
     
