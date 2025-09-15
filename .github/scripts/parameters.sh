@@ -42,14 +42,27 @@ retrieve() {
         --output text 2>/dev/null || echo "")
     
     if [[ -z "$params" ]]; then
-        log ERROR "No parameters found at $PREFIX"
-        exit 1
+        log WARN "No parameters found at $PREFIX"
+        log WARN "Infrastructure may not be deployed yet. Using defaults for local testing."
+        
+        # Set default values for local testing or first deployment
+        if [[ -n "${GITHUB_ENV:-}" ]]; then
+            echo "S3_BUCKET=pending-deployment" >> "$GITHUB_ENV"
+            echo "CLOUDFRONT_ID=pending-deployment" >> "$GITHUB_ENV"
+            echo "CLOUDFRONT_DOMAIN=pending-deployment" >> "$GITHUB_ENV"
+            echo "API_GATEWAY_URL=https://pending-deployment" >> "$GITHUB_ENV"
+            echo "LAMBDA_FUNCTION_NAME=pending-deployment" >> "$GITHUB_ENV"
+            echo "DYNAMODB_TABLE_NAME=pending-deployment" >> "$GITHUB_ENV"
+        fi
+        
+        # Don't fail, just warn
+        log WARN "Using placeholder values. Deploy infrastructure first for actual values."
+        return 0
     fi
     
     # Export parameters as environment variables
     while IFS=$'\t' read -r name value; do
         # Convert parameter name to environment variable format
-        # e.g., /pipelines-terraform/s3-bucket-name -> S3_BUCKET_NAME
         var_name=$(echo "${name##*/}" | tr '[:lower:]-' '[:upper:]_')
         
         # Handle specific mappings

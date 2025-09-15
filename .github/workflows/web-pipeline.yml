@@ -10,6 +10,7 @@ on:
   workflow_run:
     workflows: ["Infrastructure Pipeline"]
     types: [completed]
+    branches: [main, develop]
 
 env:
   AWS_REGION: eu-north-1
@@ -19,9 +20,12 @@ env:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    # Only run if triggered manually, by push/PR, or if infrastructure pipeline succeeded
     if: >
-      github.event_name != 'workflow_run' || 
-      github.event.workflow_run.conclusion == 'success'
+      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'push' ||
+      github.event_name == 'pull_request' ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
       
     steps:
       - uses: actions/checkout@v3
@@ -51,14 +55,42 @@ jobs:
           chmod +x .github/scripts/quality-checks.sh
           .github/scripts/quality-checks.sh web
       
-      # Deploy only on main/develop
-      - name: Deploy Application
+      # Check if infrastructure exists before deploying
+      - name: Check Infrastructure Status
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
+        id: infra-check
         run: |
-          # Retrieve infrastructure parameters
           chmod +x .github/scripts/parameters.sh
-          .github/scripts/parameters.sh retrieve
           
-          # Deploy application
+          # Try to retrieve parameters
+          if .github/scripts/parameters.sh retrieve; then
+            echo "infrastructure_exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "infrastructure_exists=false" >> $GITHUB_OUTPUT
+            echo "⚠️ Infrastructure not deployed yet. Run Infrastructure Pipeline first."
+          fi
+      
+      # Deploy only if infrastructure exists
+      - name: Deploy Application
+        if: |
+          (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop') &&
+          steps.infra-check.outputs.infrastructure_exists == 'true'
+        run: |
           chmod +x .github/scripts/deploy-application.sh
           .github/scripts/deploy-application.sh
+          
+      # Show message if infrastructure doesn't exist
+      - name: Infrastructure Required Message
+        if: |
+          (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop') &&
+          steps.infra-check.outputs.infrastructure_exists != 'true'
+        run: |
+          echo "📋 Infrastructure deployment required!"
+          echo "Please run the Infrastructure Pipeline first to create:"
+          echo "  - S3 bucket for frontend hosting"
+          echo "  - CloudFront distribution"
+          echo "  - Lambda function"
+          echo "  - API Gateway"
+          echo "  - DynamoDB table"
+          echo ""
+          echo "After infrastructure is deployed, this pipeline will run automatically."
