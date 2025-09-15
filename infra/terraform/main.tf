@@ -11,7 +11,7 @@
 # - modules/api-gateway/: API Gateway configuration
 # - modules/iam/: Standalone IAM policies
 # - integrations.tf: Cross-module integrations
-# This file contains module declarations.
+# This file contains module declarations
 
 # Shared Resources Module
 module "shared" {
