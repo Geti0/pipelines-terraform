@@ -1,9 +1,9 @@
 // Use a fallback for import.meta in test environments
 const getApiUrl = () => {
   try {
-    return import.meta.env.VITE_API_GATEWAY_URL || 'https://oy1go0ozja.execute-api.us-east-1.amazonaws.com/prod/contact';
+    return import.meta.env.VITE_API_GATEWAY_URL || 'https://pdytikgkcc.execute-api.eu-north-1.amazonaws.com/prod/contact';
   } catch (e) {
-    return 'https://oy1go0ozja.execute-api.us-east-1.amazonaws.com/prod/contact';
+    return 'https://pdytikgkcc.execute-api.eu-north-1.amazonaws.com/prod/contact';
   }
 };
 
