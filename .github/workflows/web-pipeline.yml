@@ -65,17 +65,17 @@ jobs:
           echo "Waiting for infrastructure parameters to be available..."
           for i in {1..30}; do
             if .github/scripts/parameters.sh retrieve; then
-              echo "✅ Infrastructure parameters found!"
+              echo "Infrastructure parameters found!"
               break
             else
-              echo "⏳ Waiting for infrastructure parameters... (attempt $i/30)"
+              echo "Waiting for infrastructure parameters... (attempt $i/30)"
               sleep 10
             fi
           done
           
           # Final check
           if ! .github/scripts/parameters.sh retrieve; then
-            echo "❌ Infrastructure parameters not available after 5 minutes"
+            echo "Infrastructure parameters not available after 5 minutes"
             echo "Please ensure the Infrastructure Pipeline has completed successfully"
             exit 1
           fi
@@ -86,8 +86,17 @@ jobs:
         run: |
           chmod +x .github/scripts/deploy-application.sh
           
-          # Retrieve infrastructure parameters (should be available now)
+          # Retrieve infrastructure parameters and export them
+          echo "Retrieving infrastructure parameters..."
           .github/scripts/parameters.sh retrieve
+          
+          # Verify environment variables are set
+          echo "Environment variables:"
+          echo "S3_BUCKET: ${S3_BUCKET:-NOT_SET}"
+          echo "CLOUDFRONT_ID: ${CLOUDFRONT_ID:-NOT_SET}"
+          echo "API_GATEWAY_URL: ${API_GATEWAY_URL:-NOT_SET}"
+          echo "LAMBDA_FUNCTION_NAME: ${LAMBDA_FUNCTION_NAME:-NOT_SET}"
+          echo "DYNAMODB_TABLE_NAME: ${DYNAMODB_TABLE_NAME:-NOT_SET}"
           
           # Deploy the application
           .github/scripts/deploy-application.sh

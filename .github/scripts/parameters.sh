@@ -81,7 +81,8 @@ retrieve() {
         
         if [[ -n "${GITHUB_ENV:-}" ]]; then
             echo "${var_name}=${value}" >> "$GITHUB_ENV"
-            log INFO "Exported to GitHub: $var_name"
+            export "${var_name}=${value}"
+            log INFO "Exported to GitHub and shell: $var_name"
         else
             export "${var_name}=${value}"
             log INFO "Exported to shell: $var_name"
