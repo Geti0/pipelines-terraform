@@ -76,7 +76,13 @@ jobs:
           (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop') &&
           steps.infra-check.outputs.infrastructure_exists == 'true'
         run: |
+          chmod +x .github/scripts/parameters.sh
           chmod +x .github/scripts/deploy-application.sh
+          
+          # Retrieve infrastructure parameters
+          .github/scripts/parameters.sh retrieve
+          
+          # Deploy the application
           .github/scripts/deploy-application.sh
 
       # Show message if infrastructure doesn't exist
