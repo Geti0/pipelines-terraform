@@ -20,6 +20,7 @@ module "cloudfront" {
 
   s3_bucket_id                   = module.s3.bucket_id
   s3_bucket_regional_domain_name = module.s3.bucket_regional_domain_name
+  s3_bucket_website_endpoint     = module.s3.bucket_website_endpoint
   ssm_value                      = var.ssm_value_cloudfront
 }
 
