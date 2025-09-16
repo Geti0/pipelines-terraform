@@ -25,6 +25,7 @@ store() {
                 --value "$value" \
                 --type String \
                 --overwrite \
+                --region eu-north-1 \
                 --no-cli-pager > /dev/null 2>&1 || log WARN "Failed to store $param_name"
             log INFO "Stored: $param_name"
         fi
@@ -39,7 +40,8 @@ retrieve() {
     params=$(aws ssm get-parameters-by-path \
         --path "$PREFIX" \
         --query 'Parameters[*].[Name,Value]' \
-        --output text 2>/dev/null || echo "")
+        --output text \
+        --region eu-north-1 2>/dev/null || echo "")
     
     if [[ -z "$params" ]]; then
         log WARN "No parameters found at $PREFIX"
