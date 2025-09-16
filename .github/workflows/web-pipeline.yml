@@ -3,9 +3,8 @@ name: Web Pipeline
 on:
   push:
     branches: [main, develop]
-    paths: ['web/**', '.github/**']
   pull_request:
-    paths: ['web/**']
+    branches: [main, develop]
   workflow_dispatch:
   workflow_run:
     workflows: ["Infrastructure Pipeline"]
@@ -55,10 +54,10 @@ jobs:
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
         id: infra-check
         run: |
-          chmod +x .github/scripts/parameters.sh
-          
           echo "Checking if infrastructure parameters are available..."
-          if .github/scripts/parameters.sh retrieve; then
+          
+          # Check if S3 bucket parameter exists
+          if aws ssm get-parameter --name "/pipelines-terraform/s3-bucket-name" --query 'Parameter.Value' --output text > /dev/null 2>&1; then
             echo "infrastructure_exists=true" >> $GITHUB_OUTPUT
             echo "Infrastructure parameters found!"
           else
