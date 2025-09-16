@@ -67,7 +67,7 @@ jobs:
             echo "infrastructure_exists=true" >> $GITHUB_OUTPUT
           else
             echo "infrastructure_exists=false" >> $GITHUB_OUTPUT
-            echo "⚠️ Infrastructure not deployed yet. Run Infrastructure Pipeline first."
+            echo "Infrastructure not deployed yet. Run Infrastructure Pipeline first."
           fi
       
       # Deploy only if infrastructure exists
@@ -85,7 +85,7 @@ jobs:
           (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop') &&
           steps.infra-check.outputs.infrastructure_exists != 'true'
         run: |
-          echo "🚨 Infrastructure deployment required!"
+          echo "Infrastructure deployment required!"
           echo "Please run the Infrastructure Pipeline first to create:"
           echo "  - S3 bucket for frontend hosting"
           echo "  - CloudFront distribution"
