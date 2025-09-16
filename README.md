@@ -47,7 +47,7 @@ A production-ready AWS CI/CD implementation using **separate pipelines** with **
 
 ```
 pipelines-terraform/
-├── 🔧 .github/workflows/           # GitHub Actions pipelines
+├── 🔧 cicd/workflows/           # GitHub Actions pipelines
 │   ├── infrastructure-pipeline.yml  # Terraform deployment
 │   └── web-pipeline.yml            # Web app deployment
 ├── 🏗️ infra/                       # Infrastructure as Code

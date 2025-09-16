@@ -3,7 +3,7 @@ name: Web Pipeline
 on:
   push:
     branches: [main, develop]
-    paths: ['web/**', '.github/**']
+    paths: ['web/**', 'cicd/**']
   pull_request:
     paths: ['web/**']
   workflow_dispatch:
@@ -52,18 +52,18 @@ jobs:
       # Run quality checks for web components only (not terraform)
       - name: Quality Checks
         run: |
-          chmod +x .github/scripts/quality-checks.sh
-          .github/scripts/quality-checks.sh web
+          chmod +x cicd/scripts/quality-checks.sh
+          cicd/scripts/quality-checks.sh web
       
       # Check if infrastructure exists before deploying
       - name: Check Infrastructure Status
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
         id: infra-check
         run: |
-          chmod +x .github/scripts/parameters.sh
+          chmod +x cicd/scripts/parameters.sh
           
           # Try to retrieve parameters
-          if .github/scripts/parameters.sh retrieve; then
+          if cicd/scripts/parameters.sh retrieve; then
             echo "infrastructure_exists=true" >> $GITHUB_OUTPUT
           else
             echo "infrastructure_exists=false" >> $GITHUB_OUTPUT
@@ -76,9 +76,9 @@ jobs:
           (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop') &&
           steps.infra-check.outputs.infrastructure_exists == 'true'
         run: |
-          chmod +x .github/scripts/deploy-application.sh
-          .github/scripts/deploy-application.sh
-          
+          chmod +x cicd/scripts/deploy-application.sh
+          cicd/scripts/deploy-application.sh
+
       # Show message if infrastructure doesn't exist
       - name: Infrastructure Required Message
         if: |

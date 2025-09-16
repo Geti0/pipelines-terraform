@@ -3,7 +3,7 @@ name: Infrastructure Pipeline
 on:
   push:
     branches: [main, develop]
-    paths: ['infra/**', '.github/**']
+    paths: ['infra/**', 'cicd/**']
   pull_request:
     paths: ['infra/**']
   workflow_dispatch:
@@ -54,18 +54,18 @@ jobs:
       # Quality checks
       - name: Quality Check
         run: |
-          chmod +x .github/scripts/quality-checks.sh
-          .github/scripts/quality-checks.sh terraform
+          chmod +x cicd/scripts/quality-checks.sh
+          cicd/scripts/quality-checks.sh terraform
       
       # Deploy only on main/develop
       - name: Deploy Infrastructure
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
         run: |
-          chmod +x .github/scripts/terraform-apply.sh
-          .github/scripts/terraform-apply.sh
+          chmod +x cicd/scripts/terraform-apply.sh
+          cicd/scripts/terraform-apply.sh
           
       - name: Store Outputs
         if: success() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
         run: |
-          chmod +x .github/scripts/parameters.sh
-          .github/scripts/parameters.sh store
+          chmod +x cicd/scripts/parameters.sh
+          cicd/scripts/parameters.sh store
