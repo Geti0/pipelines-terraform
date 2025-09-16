@@ -1,16 +1,12 @@
 name: Web Pipeline
 
 on:
-  push:
-    branches: [main, develop]
-  pull_request:
-    branches: [main, develop]
-  workflow_dispatch:
   workflow_run:
     workflows: ["Infrastructure Pipeline"]
     types: [completed]
     branches: [main, develop]
     conditions: [success]
+  workflow_dispatch:
 
 env:
   AWS_REGION: eu-north-1
@@ -49,22 +45,32 @@ jobs:
           chmod +x .github/scripts/quality-checks.sh
           .github/scripts/quality-checks.sh web
       
-      # Check if infrastructure exists before deploying
-      - name: Check Infrastructure Status
+      # Wait for infrastructure parameters to be available (with retry)
+      - name: Wait for Infrastructure Parameters
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
         id: infra-check
         run: |
-          echo "Checking if infrastructure parameters are available..."
+          echo "Waiting for infrastructure parameters to be available..."
           
-          # Check if S3 bucket parameter exists
-          if aws ssm get-parameter --name "/pipelines-terraform/s3-bucket-name" --query 'Parameter.Value' --output text > /dev/null 2>&1; then
-            echo "infrastructure_exists=true" >> $GITHUB_OUTPUT
-            echo "Infrastructure parameters found!"
-          else
-            echo "infrastructure_exists=false" >> $GITHUB_OUTPUT
-            echo "Infrastructure parameters not found!"
-            echo "Please ensure the Infrastructure Pipeline has completed successfully first."
-          fi
+          # Wait up to 5 minutes for parameters to be available
+          for i in {1..30}; do
+            echo "Attempt $i/30: Checking for infrastructure parameters..."
+            
+            if aws ssm get-parameter --name "/pipelines-terraform/s3-bucket-name" --query 'Parameter.Value' --output text > /dev/null 2>&1; then
+              echo "infrastructure_exists=true" >> $GITHUB_OUTPUT
+              echo " Infrastructure parameters found!"
+              break
+            else
+              echo " Infrastructure parameters not ready yet, waiting 10 seconds..."
+              sleep 10
+            fi
+            
+            if [ $i -eq 30 ]; then
+              echo "infrastructure_exists=false" >> $GITHUB_OUTPUT
+              echo " Infrastructure parameters not found after 5 minutes!"
+              echo "Please ensure the Infrastructure Pipeline has completed successfully first."
+            fi
+          done
       
       # Deploy the application (with infrastructure check and parameter retrieval)
       - name: Deploy Application
@@ -75,13 +81,31 @@ jobs:
           chmod +x .github/scripts/deploy-application.sh
           
           # Retrieve infrastructure parameters directly
-          echo "Retrieving infrastructure parameters..."
+          echo "Retrieving latest infrastructure parameters..."
           export S3_BUCKET=$(aws ssm get-parameter --name "/pipelines-terraform/s3-bucket-name" --query 'Parameter.Value' --output text)
           export CLOUDFRONT_ID=$(aws ssm get-parameter --name "/pipelines-terraform/cloudfront-distribution-id" --query 'Parameter.Value' --output text)
           export CLOUDFRONT_DOMAIN=$(aws ssm get-parameter --name "/pipelines-terraform/cloudfront-domain-name" --query 'Parameter.Value' --output text)
           export API_GATEWAY_URL=$(aws ssm get-parameter --name "/pipelines-terraform/api-gateway-url" --query 'Parameter.Value' --output text)
           export LAMBDA_FUNCTION_NAME=$(aws ssm get-parameter --name "/pipelines-terraform/lambda-function-name" --query 'Parameter.Value' --output text)
           export DYNAMODB_TABLE_NAME=$(aws ssm get-parameter --name "/pipelines-terraform/dynamodb-table-name" --query 'Parameter.Value' --output text)
+          
+          # Verify we got the latest parameters (not old ones)
+          echo " Verifying parameter values:"
+          echo "S3_BUCKET: ${S3_BUCKET}"
+          echo "CLOUDFRONT_ID: ${CLOUDFRONT_ID}"
+          echo "CLOUDFRONT_DOMAIN: ${CLOUDFRONT_DOMAIN}"
+          echo "API_GATEWAY_URL: ${API_GATEWAY_URL}"
+          echo "LAMBDA_FUNCTION_NAME: ${LAMBDA_FUNCTION_NAME}"
+          echo "DYNAMODB_TABLE_NAME: ${DYNAMODB_TABLE_NAME}"
+          
+          # Check if we got old parameters (these should not exist anymore)
+          if [[ "$S3_BUCKET" == *"0fe58824"* ]] || [[ "$CLOUDFRONT_ID" == *"E2T59JEKHP8VPH"* ]] || [[ "$LAMBDA_FUNCTION_NAME" == *"cd933966"* ]]; then
+            echo " ERROR: Got old infrastructure parameters! This means the infrastructure pipeline didn't complete properly."
+            echo "Expected new parameters, but got old ones. Please check the infrastructure pipeline."
+            exit 1
+          fi
+          
+          echo " All parameters verified as latest versions"
           
           # Verify environment variables are set
           echo "Environment variables:"
