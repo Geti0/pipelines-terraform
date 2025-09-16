@@ -56,7 +56,7 @@ jobs:
           for i in {1..30}; do
             echo "Attempt $i/30: Checking for infrastructure parameters..."
             
-            if aws ssm get-parameter --name "/pipelines-terraform/s3-bucket-name" --query 'Parameter.Value' --output text > /dev/null 2>&1; then
+            if aws ssm get-parameter --name "/pipelines-terraform/s3-bucket-name" --query 'Parameter.Value' --output text --region eu-north-1 > /dev/null 2>&1; then
               echo "infrastructure_exists=true" >> $GITHUB_OUTPUT
               echo " Infrastructure parameters found!"
               break
@@ -82,12 +82,12 @@ jobs:
           
           # Retrieve infrastructure parameters directly
           echo "Retrieving latest infrastructure parameters..."
-          export S3_BUCKET=$(aws ssm get-parameter --name "/pipelines-terraform/s3-bucket-name" --query 'Parameter.Value' --output text)
-          export CLOUDFRONT_ID=$(aws ssm get-parameter --name "/pipelines-terraform/cloudfront-distribution-id" --query 'Parameter.Value' --output text)
-          export CLOUDFRONT_DOMAIN=$(aws ssm get-parameter --name "/pipelines-terraform/cloudfront-domain-name" --query 'Parameter.Value' --output text)
-          export API_GATEWAY_URL=$(aws ssm get-parameter --name "/pipelines-terraform/api-gateway-url" --query 'Parameter.Value' --output text)
-          export LAMBDA_FUNCTION_NAME=$(aws ssm get-parameter --name "/pipelines-terraform/lambda-function-name" --query 'Parameter.Value' --output text)
-          export DYNAMODB_TABLE_NAME=$(aws ssm get-parameter --name "/pipelines-terraform/dynamodb-table-name" --query 'Parameter.Value' --output text)
+          export S3_BUCKET=$(aws ssm get-parameter --name "/pipelines-terraform/s3-bucket-name" --query 'Parameter.Value' --output text --region eu-north-1)
+          export CLOUDFRONT_ID=$(aws ssm get-parameter --name "/pipelines-terraform/cloudfront-distribution-id" --query 'Parameter.Value' --output text --region eu-north-1)
+          export CLOUDFRONT_DOMAIN=$(aws ssm get-parameter --name "/pipelines-terraform/cloudfront-domain-name" --query 'Parameter.Value' --output text --region eu-north-1)
+          export API_GATEWAY_URL=$(aws ssm get-parameter --name "/pipelines-terraform/api-gateway-url" --query 'Parameter.Value' --output text --region eu-north-1)
+          export LAMBDA_FUNCTION_NAME=$(aws ssm get-parameter --name "/pipelines-terraform/lambda-function-name" --query 'Parameter.Value' --output text --region eu-north-1)
+          export DYNAMODB_TABLE_NAME=$(aws ssm get-parameter --name "/pipelines-terraform/dynamodb-table-name" --query 'Parameter.Value' --output text --region eu-north-1)
           
           # Verify we got the latest parameters (not old ones)
           echo " Verifying parameter values:"
