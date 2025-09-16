@@ -61,8 +61,9 @@ jobs:
       - name: Deploy Infrastructure
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
         run: |
-          chmod +x .github/scripts/terraform-apply.sh
-          .github/scripts/terraform-apply.sh
+          cd infra/terraform
+          terraform plan -out=tfplan
+          terraform apply -auto-approve tfplan
           
       - name: Store Outputs
         if: success() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')

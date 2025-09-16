@@ -13,7 +13,6 @@ resource "aws_s3_bucket" "website" {
     ignore_changes = [
       tags,
       website,
-      acl,
       force_destroy,
       logging,
       versioning,
@@ -21,7 +20,6 @@ resource "aws_s3_bucket" "website" {
       replication_configuration,
       cors_rule,
       server_side_encryption_configuration,
-      policy,
     ]
   }
 }
