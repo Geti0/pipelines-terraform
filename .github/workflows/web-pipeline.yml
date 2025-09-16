@@ -55,31 +55,38 @@ jobs:
           chmod +x .github/scripts/quality-checks.sh
           .github/scripts/quality-checks.sh web
       
-      # Check if infrastructure exists before deploying
-      - name: Check Infrastructure Status
+      # Wait for infrastructure parameters to be available
+      - name: Wait for Infrastructure Parameters
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
-        id: infra-check
         run: |
           chmod +x .github/scripts/parameters.sh
           
-          # Try to retrieve parameters
-          if .github/scripts/parameters.sh retrieve; then
-            echo "infrastructure_exists=true" >> $GITHUB_OUTPUT
-          else
-            echo "infrastructure_exists=false" >> $GITHUB_OUTPUT
-            echo "Infrastructure not deployed yet. Run Infrastructure Pipeline first."
+          # Wait for parameters to be available (with timeout)
+          echo "Waiting for infrastructure parameters to be available..."
+          for i in {1..30}; do
+            if .github/scripts/parameters.sh retrieve; then
+              echo "✅ Infrastructure parameters found!"
+              break
+            else
+              echo "⏳ Waiting for infrastructure parameters... (attempt $i/30)"
+              sleep 10
+            fi
+          done
+          
+          # Final check
+          if ! .github/scripts/parameters.sh retrieve; then
+            echo "❌ Infrastructure parameters not available after 5 minutes"
+            echo "Please ensure the Infrastructure Pipeline has completed successfully"
+            exit 1
           fi
       
-      # Deploy only if infrastructure exists
+      # Deploy the application
       - name: Deploy Application
-        if: |
-          (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop') &&
-          steps.infra-check.outputs.infrastructure_exists == 'true'
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
         run: |
-          chmod +x .github/scripts/parameters.sh
           chmod +x .github/scripts/deploy-application.sh
           
-          # Retrieve infrastructure parameters
+          # Retrieve infrastructure parameters (should be available now)
           .github/scripts/parameters.sh retrieve
           
           # Deploy the application
