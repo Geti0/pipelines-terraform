@@ -1,17 +1,5 @@
 # Main Terraform configuration for AWS CI/CD Assignment
-# 
-# This file has been refactored for better organization. Infrastructure 
-# resources are now separated into dedicated modules:
-#
-# - shared/: Random resources and shared utilities
-# - modules/s3/: S3 bucket resources for website hosting
-# - modules/cloudfront/: CloudFront distribution
-# - modules/dynamodb/: DynamoDB table for contact submissions
-# - modules/lambda/: Lambda function and related IAM resources
-# - modules/api-gateway/: API Gateway configuration
-# - modules/iam/: Standalone IAM policies
-# - integrations.tf: Cross-module integrations
-# - This file contains module declarations
+
 
 # Shared Resources Module
 module "shared" {
