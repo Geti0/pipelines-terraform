@@ -11,6 +11,7 @@ on:
     workflows: ["Infrastructure Pipeline"]
     types: [completed]
     branches: [main, develop]
+    conditions: [success]
 
 env:
   AWS_REGION: eu-north-1
@@ -20,12 +21,6 @@ env:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    # Only run if triggered manually, by push/PR, or if infrastructure pipeline succeeded
-    if: >
-      github.event_name == 'workflow_dispatch' ||
-      github.event_name == 'push' ||
-      github.event_name == 'pull_request' ||
-      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
       
     steps:
       - uses: actions/checkout@v3
@@ -55,38 +50,12 @@ jobs:
           chmod +x .github/scripts/quality-checks.sh
           .github/scripts/quality-checks.sh web
       
-      # Wait for infrastructure parameters to be available
-      - name: Wait for Infrastructure Parameters
+      # Retrieve infrastructure parameters (infrastructure pipeline has already completed successfully)
+      - name: Retrieve Infrastructure Parameters
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
         run: |
           chmod +x .github/scripts/parameters.sh
           
-          # Wait for parameters to be available (with timeout)
-          echo "Waiting for infrastructure parameters to be available..."
-          for i in {1..30}; do
-            if .github/scripts/parameters.sh retrieve; then
-              echo "Infrastructure parameters found!"
-              break
-            else
-              echo "Waiting for infrastructure parameters... (attempt $i/30)"
-              sleep 10
-            fi
-          done
-          
-          # Final check
-          if ! .github/scripts/parameters.sh retrieve; then
-            echo "Infrastructure parameters not available after 5 minutes"
-            echo "Please ensure the Infrastructure Pipeline has completed successfully"
-            exit 1
-          fi
-      
-      # Deploy the application
-      - name: Deploy Application
-        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
-        run: |
-          chmod +x .github/scripts/deploy-application.sh
-          
-          # Retrieve infrastructure parameters and export them
           echo "Retrieving infrastructure parameters..."
           .github/scripts/parameters.sh retrieve
           
@@ -97,22 +66,12 @@ jobs:
           echo "API_GATEWAY_URL: ${API_GATEWAY_URL:-NOT_SET}"
           echo "LAMBDA_FUNCTION_NAME: ${LAMBDA_FUNCTION_NAME:-NOT_SET}"
           echo "DYNAMODB_TABLE_NAME: ${DYNAMODB_TABLE_NAME:-NOT_SET}"
-          
-          # Deploy the application
-          .github/scripts/deploy-application.sh
-
-      # Show message if infrastructure doesn't exist
-      - name: Infrastructure Required Message
-        if: |
-          (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop') &&
-          steps.infra-check.outputs.infrastructure_exists != 'true'
+      
+      # Deploy the application
+      - name: Deploy Application
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
         run: |
-          echo "Infrastructure deployment required!"
-          echo "Please run the Infrastructure Pipeline first to create:"
-          echo "  - S3 bucket for frontend hosting"
-          echo "  - CloudFront distribution"
-          echo "  - Lambda function"
-          echo "  - API Gateway"
-          echo "  - DynamoDB table"
-          echo ""
-          echo "After infrastructure is deployed, this pipeline will run automatically."
+          chmod +x .github/scripts/deploy-application.sh
+          
+          # Deploy the application (parameters are already available from previous step)
+          .github/scripts/deploy-application.sh
