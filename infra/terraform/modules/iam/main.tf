@@ -1,5 +1,3 @@
-# Standalone IAM policies for CI/CD Pipeline
-
 # IAM Policy for CI/CD Pipeline Access to Parameter Store
 resource "aws_iam_policy" "pipeline_parameter_store_policy" {
   name        = "${var.project_name}-${var.deployment_id}-pipeline-parameter-store-policy-${var.resource_suffix}"

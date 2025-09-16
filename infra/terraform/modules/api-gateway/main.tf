@@ -97,7 +97,3 @@ resource "aws_api_gateway_integration_response" "options_contact" {
     "method.response.header.Access-Control-Allow-Origin"  = "'*'"
   }
 }
-
-# Lambda Integration will be created separately to avoid circular dependency
-
-# API Gateway Deployment will be created separately after Lambda integration
