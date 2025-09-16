@@ -1,4 +1,4 @@
-# Main Terraform configuration for AWS CI/CD Assignmen
+# Main Terraform configuration for AWS CI/CD Assignment
 # Shared Resources Module
 module "shared" {
   source = "./shared"

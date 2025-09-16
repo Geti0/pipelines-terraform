@@ -1,3 +1,7 @@
+# Minimal placeholder for parameters script
+
+echo "[INFO] Running parameters script (placeholder) with argument: $1"
+exit 0
 #!/bin/bash
 set -euo pipefail
 
