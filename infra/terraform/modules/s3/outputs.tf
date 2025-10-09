@@ -14,3 +14,8 @@ output "bucket_regional_domain_name" {
   description = "S3 bucket regional domain name"
   value       = aws_s3_bucket.website.bucket_regional_domain_name
 }
+
+output "bucket_website_endpoint" {
+  description = "S3 bucket website endpoint"
+  value       = aws_s3_bucket_website_configuration.website_config.website_endpoint
+}

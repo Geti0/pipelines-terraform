@@ -1,7 +1,3 @@
-# Minimal placeholder for parameters script
-
-echo "[INFO] Running parameters script (placeholder) with argument: $1"
-exit 0
 #!/bin/bash
 set -euo pipefail
 
@@ -29,6 +25,7 @@ store() {
                 --value "$value" \
                 --type String \
                 --overwrite \
+                --region eu-north-1 \
                 --no-cli-pager > /dev/null 2>&1 || log WARN "Failed to store $param_name"
             log INFO "Stored: $param_name"
         fi
@@ -43,7 +40,8 @@ retrieve() {
     params=$(aws ssm get-parameters-by-path \
         --path "$PREFIX" \
         --query 'Parameters[*].[Name,Value]' \
-        --output text 2>/dev/null || echo "")
+        --output text \
+        --region eu-north-1 2>/dev/null || echo "")
     
     if [[ -z "$params" ]]; then
         log WARN "No parameters found at $PREFIX"
@@ -81,7 +79,8 @@ retrieve() {
         
         if [[ -n "${GITHUB_ENV:-}" ]]; then
             echo "${var_name}=${value}" >> "$GITHUB_ENV"
-            log INFO "Exported to GitHub: $var_name"
+            export "${var_name}=${value}"
+            log INFO "Exported to GitHub and shell: $var_name"
         else
             export "${var_name}=${value}"
             log INFO "Exported to shell: $var_name"

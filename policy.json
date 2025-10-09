@@ -1,0 +1,33 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Action": [
+                "ssm:GetParameter",
+                "ssm:GetParameters",
+                "ssm:PutParameter",
+                "ssm:DeleteParameter",
+                "ssm:GetParameterHistory",
+                "ssm:ListTagsForResource"
+            ],
+            "Effect": "Allow",
+            "Resource": [
+                "arn:aws:ssm:eu-north-1:479324457009:parameter/pipelines-terraform/*",
+                "arn:aws:ssm:eu-north-1:479324457009:parameter/api-gateway/*",
+                "arn:aws:ssm:eu-north-1:479324457009:parameter/cloudfront/*",
+                "arn:aws:ssm:eu-north-1:479324457009:parameter/dynamodb/*",
+                "arn:aws:ssm:eu-north-1:479324457009:parameter/iam/*",
+                "arn:aws:ssm:eu-north-1:479324457009:parameter/lambda/*",
+                "arn:aws:ssm:eu-north-1:479324457009:parameter/s3/*"
+            ]
+        },
+        {
+            "Action": [
+                "ssm:DescribeParameters",
+                "ssm:ListTagsForResource"
+            ],
+            "Effect": "Allow",
+            "Resource": "*"
+        }
+    ]
+}

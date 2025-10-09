@@ -4,7 +4,7 @@ const { v4: uuidv4 } = require('uuid');
 
 // Configure AWS SDK with region
 AWS.config.update({
-    region: process.env.AWS_REGION || 'us-east-1'
+    region: process.env.AWS_REGION || 'eu-north-1'
 });
 
 const dynamodb = new AWS.DynamoDB.DocumentClient();
@@ -95,7 +95,7 @@ exports.handler = async (event) => {
 
         // Store in DynamoDB
         await dynamodb.put({
-            TableName: process.env.DYNAMODB_TABLE,
+            TableName: process.env.DYNAMODB_TABLE_NAME,
             Item: item
         }).promise();
 
